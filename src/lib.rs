@@ -26,10 +26,10 @@
 
 use futures::Stream;
 
-pub mod throttle;
+mod throttle;
 #[cfg(feature = "tokio")]
-pub use throttle::IntervalThrottler;
-pub use throttle::{IntervalThrottlerConfig, Throttle, Throttler};
+pub use self::throttle::IntervalThrottler;
+pub use self::throttle::{IntervalThrottlerConfig, Throttle, Throttler};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntervalEdge {
