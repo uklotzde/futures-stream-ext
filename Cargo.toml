@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: The futures-stream-ext authors
+# SPDX-License-Identifier: MPL-2.0
+
+[package]
+name = "futures-stream-ext"
+description = "Asynchronous stream extensions for the futures crate"
+version = "0.0.1"
+license = "MPL-2.0"
+readme = "README.md"
+repository = "https://github.com/uklotzde/futures-stream-ext"
+categories = ["asynchronous"]
+keywords = ["async", "stream"]
+edition = "2021"
+include = ["/src", "/README.md", "/LICENSES"]
+
+[dependencies]
+futures = "0.3.29"
+pin-project-lite = "0.2.13"
+tokio = { version = "1.35.0", optional = true, features = ["time"] }
+
+[dev-dependencies]
+tokio = { version = "1.35.0", features = ["rt", "test-util"] }
+
+[features]
+default = ["tokio"]
+tokio = ["dep:tokio"]
