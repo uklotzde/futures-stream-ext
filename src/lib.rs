@@ -24,7 +24,7 @@
 // TODO: Add missing docs
 #![allow(clippy::missing_errors_doc)]
 
-use futures::Stream;
+use futures_core::Stream;
 
 mod throttle;
 #[cfg(feature = "tokio")]

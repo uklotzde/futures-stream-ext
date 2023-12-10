@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::stream::Stream;
+use futures_core::stream::Stream;
 use pin_project_lite::pin_project;
 
 use crate::IntervalEdge;

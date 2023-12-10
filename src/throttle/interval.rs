@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::Stream;
+use futures_core::Stream;
 use pin_project_lite::pin_project;
 use tokio::time::Interval;
 
