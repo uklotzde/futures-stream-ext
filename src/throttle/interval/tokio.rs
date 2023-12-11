@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_terminate_on_empty_input_stream() {
+    async fn should_finish_on_empty_input_stream() {
         for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
             for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
                 let config = IntervalThrottlerConfig { period, edge };
@@ -258,7 +258,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_terminate_after_non_empty_input_stream_has_completed() {
+    async fn should_finish_after_non_empty_input_stream_has_completed() {
         for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
             for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
                 let config = IntervalThrottlerConfig { period, edge };
