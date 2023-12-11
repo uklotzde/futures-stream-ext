@@ -34,7 +34,7 @@ pin_project! {
 impl<T> IntervalThrottler<T> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(config: ThrottleIntervalConfig) -> Self {
+    pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
         let ThrottleIntervalConfig { period, edge } = config;
         Self {
             interval: (period > Duration::ZERO).then(|| tokio::time::interval(period)),
