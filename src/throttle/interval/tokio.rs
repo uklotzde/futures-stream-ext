@@ -240,4 +240,37 @@ mod tests {
             run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len());
         assert_eq!(expected_items, collected_items.as_slice());
     }
+
+    #[tokio::test]
+    async fn should_terminate_on_empty_input_stream() {
+        for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
+            for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
+                let config = IntervalThrottlerConfig { period, edge };
+                assert_eq!(
+                    Vec::<()>::new(),
+                    futures::stream::empty::<()>()
+                        .throttle_interval(config, NonZeroUsize::MIN)
+                        .collect::<Vec<_>>()
+                        .await
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn should_terminate_after_non_empty_input_stream_has_completed() {
+        for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
+            for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
+                let config = IntervalThrottlerConfig { period, edge };
+                assert_eq!(
+                    &[()],
+                    futures::stream::once(async {})
+                        .throttle_interval(config, NonZeroUsize::MIN)
+                        .collect::<Vec<_>>()
+                        .await
+                        .as_slice()
+                );
+            }
+        }
+    }
 }

@@ -88,11 +88,11 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
 
-        // Poll the inner stream while it yields items. We want to receive
-        // the most recent item that is ready.
-        let mut ready_count = 0;
-        loop {
-            if matches!(this.state, State::Streaming) {
+        if matches!(this.state, State::Streaming) {
+            // Poll the inner stream while it yields items. We want to receive
+            // the most recent item that is ready.
+            let mut ready_count = 0;
+            loop {
                 match this.stream.as_mut().poll_next(cx) {
                     Poll::Ready(Some(item)) => {
                         if this.pending.is_none() {
