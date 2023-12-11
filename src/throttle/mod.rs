@@ -5,31 +5,35 @@ use std::{
     num::NonZeroUsize,
     pin::Pin,
     task::{ready, Context, Poll},
-    time::Duration,
 };
 
 use futures_core::stream::Stream;
 use pin_project_lite::pin_project;
 
-use crate::IntervalEdge;
-
-#[cfg(feature = "tokio")]
 mod interval;
 #[cfg(feature = "tokio")]
 pub use self::interval::IntervalThrottler;
+pub use self::interval::IntervalThrottlerConfig;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntervalThrottlerConfig {
-    pub period: Duration,
-    pub edge: IntervalEdge,
-}
-
+/// Callbacks for throttling a stream.
 pub trait Throttler<T>: Stream<Item = ()> {
     /// A new item has been received from the input stream.
+    ///
+    /// After invocation of this method `throttle_ready` will be called
+    /// with `Some` when the current interval has elapsed. The current
+    /// item that will be yielded may still change until `throttle_ready`
+    /// is called.
+    ///
+    /// The `cx` argument is only provided for consistency and can safely
+    /// be ignored in most cases. The throttler will be polled immediately
+    /// after this method returns.
     fn throttle_pending(self: Pin<&mut Self>, cx: &mut Context<'_>);
 
-    /// The next pending item of the throttled stream that is ready or `None` if no item
-    /// has been received from the input stream during the last interval.
+    /// The current interval has elapsed.
+    ///
+    /// Provides the pending item of the throttled input stream that is ready
+    /// or `None` if no item has been received from the input stream during
+    /// the last interval.
     fn throttle_ready(self: Pin<&mut Self>, cx: &mut Context<'_>, next_item: Option<&T>);
 }
 

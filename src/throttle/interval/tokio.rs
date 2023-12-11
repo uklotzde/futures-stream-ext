@@ -12,7 +12,7 @@ use futures_core::Stream;
 use pin_project_lite::pin_project;
 use tokio::time::Interval;
 
-use crate::{IntervalEdge, IntervalThrottlerConfig};
+use crate::{IntervalEdge, IntervalThrottlerConfig, Throttler};
 
 #[derive(Debug, Clone, Copy)]
 enum State {
@@ -63,7 +63,7 @@ impl<T> Stream for IntervalThrottler<T> {
     }
 }
 
-impl<T> super::Throttler<T> for IntervalThrottler<T> {
+impl<T> Throttler<T> for IntervalThrottler<T> {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
         let this = self.project();
         match this.state {

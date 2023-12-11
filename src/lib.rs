@@ -10,8 +10,6 @@
 // Repeating the type name in `Default::default()` expressions is not needed
 // as long as the context is obvious.
 #![allow(clippy::default_trait_access)]
-// TODO: Add missing docs
-#![allow(clippy::missing_errors_doc)]
 
 use futures_core::Stream;
 
