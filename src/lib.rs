@@ -18,7 +18,7 @@ use futures_core::Stream;
 mod throttle;
 #[cfg(feature = "tokio")]
 pub use self::throttle::IntervalThrottler;
-pub use self::throttle::{IntervalThrottlerConfig, Throttle, Throttler};
+pub use self::throttle::{Throttle, ThrottleIntervalConfig, Throttler};
 
 /// Interval edge trigger variants
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub trait StreamExt: Stream {
     #[cfg(feature = "tokio")]
     fn throttle_interval(
         self,
-        config: IntervalThrottlerConfig,
+        config: ThrottleIntervalConfig,
         poll_next_max_ready_count: std::num::NonZeroUsize,
     ) -> Throttle<Self, IntervalThrottler<Self::Item>>
     where

@@ -12,7 +12,7 @@ use futures_core::Stream;
 use pin_project_lite::pin_project;
 use tokio::time::Interval;
 
-use crate::{IntervalEdge, IntervalThrottlerConfig, Throttler};
+use crate::{IntervalEdge, ThrottleIntervalConfig, Throttler};
 
 #[derive(Debug, Clone, Copy)]
 enum State {
@@ -34,8 +34,8 @@ pin_project! {
 impl<T> IntervalThrottler<T> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(config: IntervalThrottlerConfig) -> Self {
-        let IntervalThrottlerConfig { period, edge } = config;
+    pub fn new(config: ThrottleIntervalConfig) -> Self {
+        let ThrottleIntervalConfig { period, edge } = config;
         Self {
             interval: (period > Duration::ZERO).then(|| tokio::time::interval(period)),
             edge,
@@ -104,7 +104,7 @@ mod tests {
 
     use futures::{Stream, StreamExt as _};
 
-    use crate::{IntervalEdge, IntervalThrottlerConfig, StreamExt as _};
+    use crate::{IntervalEdge, StreamExt as _, ThrottleIntervalConfig};
 
     const TIME_TICK: Duration = Duration::from_millis(1);
 
@@ -128,7 +128,7 @@ mod tests {
     }
 
     fn run_alternating_delay_stream(
-        config: IntervalThrottlerConfig,
+        config: ThrottleIntervalConfig,
         first_delay: Duration,
         second_delay: Duration,
         num_items: usize,
@@ -159,11 +159,11 @@ mod tests {
         let period = Duration::ZERO;
         let expected_items = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         for config in [
-            IntervalThrottlerConfig {
+            ThrottleIntervalConfig {
                 period,
                 edge: IntervalEdge::Leading,
             },
-            IntervalThrottlerConfig {
+            ThrottleIntervalConfig {
                 period,
                 edge: IntervalEdge::Trailing,
             },
@@ -185,11 +185,11 @@ mod tests {
         let expected_items = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         for period in [Duration::ZERO, TIME_TICK.saturating_mul(9)] {
             for config in [
-                IntervalThrottlerConfig {
+                ThrottleIntervalConfig {
                     period,
                     edge: IntervalEdge::Leading,
                 },
-                IntervalThrottlerConfig {
+                ThrottleIntervalConfig {
                     period,
                     edge: IntervalEdge::Trailing,
                 },
@@ -211,7 +211,7 @@ mod tests {
         // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 | ...
         let first_delay = TIME_TICK.saturating_mul(20);
         let second_delay = TIME_TICK.saturating_mul(10);
-        let config = IntervalThrottlerConfig {
+        let config = ThrottleIntervalConfig {
             period: TIME_TICK.saturating_mul(19),
             edge: IntervalEdge::Leading,
         };
@@ -229,7 +229,7 @@ mod tests {
         // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 |  15 | ...
         let first_delay = TIME_TICK.saturating_mul(10);
         let second_delay = TIME_TICK.saturating_mul(20);
-        let config = IntervalThrottlerConfig {
+        let config = ThrottleIntervalConfig {
             period: TIME_TICK.saturating_mul(19),
             edge: IntervalEdge::Trailing,
         };
@@ -245,7 +245,7 @@ mod tests {
     async fn should_finish_on_empty_input_stream() {
         for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
             for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
-                let config = IntervalThrottlerConfig { period, edge };
+                let config = ThrottleIntervalConfig { period, edge };
                 assert_eq!(
                     Vec::<()>::new(),
                     futures::stream::empty::<()>()
@@ -261,7 +261,7 @@ mod tests {
     async fn should_finish_after_non_empty_input_stream_has_completed() {
         for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
             for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
-                let config = IntervalThrottlerConfig { period, edge };
+                let config = ThrottleIntervalConfig { period, edge };
                 assert_eq!(
                     &[()],
                     futures::stream::once(async {})

@@ -11,10 +11,15 @@ mod tokio;
 pub use self::tokio::IntervalThrottler;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntervalThrottlerConfig {
-    /// The minimum interval between subsequent items.
+pub struct ThrottleIntervalConfig {
+    /// Throttling period
+    ///
+    /// The minimum interval between subsequent items that limits the
+    /// maximum frequency of the output stream.
     pub period: Duration,
 
+    /// Interval edge gate
+    ///
     /// Controls whether the pending item of the stream is yielded
     /// immediately or after the interval has elapsed.
     pub edge: IntervalEdge,

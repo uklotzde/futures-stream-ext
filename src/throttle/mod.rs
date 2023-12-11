@@ -13,7 +13,7 @@ use pin_project_lite::pin_project;
 mod interval;
 #[cfg(feature = "tokio")]
 pub use self::interval::IntervalThrottler;
-pub use self::interval::IntervalThrottlerConfig;
+pub use self::interval::ThrottleIntervalConfig;
 
 /// Callbacks for throttling a stream
 pub trait Throttler<T>: Stream<Item = ()> {
