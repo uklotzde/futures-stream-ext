@@ -15,7 +15,7 @@ mod interval;
 pub use self::interval::IntervalThrottler;
 pub use self::interval::IntervalThrottlerConfig;
 
-/// Callbacks for throttling a stream.
+/// Callbacks for throttling a stream
 pub trait Throttler<T>: Stream<Item = ()> {
     /// A new item has been received from the input stream.
     ///
@@ -46,6 +46,7 @@ enum State {
 }
 
 pin_project! {
+    /// Throttled stream
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled or .awaited"]
     pub struct Throttle<S: Stream, T: Throttler<<S as Stream>::Item>> {

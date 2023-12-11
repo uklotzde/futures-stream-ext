@@ -3,7 +3,7 @@
 
 [package]
 name = "futures-stream-ext"
-description = "Asynchronous stream extensions for the futures crate"
+description = "Asynchronous stream extensions for the futures(-core) crate"
 version = "0.0.2"
 license = "MPL-2.0"
 readme = "README.md"
