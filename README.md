@@ -7,7 +7,7 @@
 [![Docs.rs](https://docs.rs/futures-stream-ext/badge.svg)](https://docs.rs/futures-stream-ext)
 [![Deps.rs](https://deps.rs/repo/github/uklotzde/futures-stream-ext/status.svg)](https://deps.rs/repo/github/uklotzde/futures-stream-ext)
 [![Security audit](https://github.com/uklotzde/futures-stream-ext/actions/workflows/security-audit.yaml/badge.svg)](https://github.com/uklotzde/futures-stream-ext/actions/workflows/security-audit.yaml)
-[![Continuous integration](https://github.com/uklotzde/futures-stream-ext/actions/workflows/continuous-integration.yaml/badge.svg)](https://github.com/uklotzde/futures-stream-ext/actions/workflows/continuous-integration.yaml)
+[![Continuous integration](https://github.com/uklotzde/futures-stream-ext/actions/workflows/test.yaml/badge.svg)](https://github.com/uklotzde/futures-stream-ext/actions/workflows/test.yaml)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 Extensions of the
