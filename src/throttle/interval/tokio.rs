@@ -31,13 +31,23 @@ pin_project! {
     }
 }
 
+fn throttle_interval(period: Duration) -> Option<tokio::time::Interval> {
+    if period.is_zero() {
+        return None;
+    }
+    let mut interval = tokio::time::interval(period);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    Some(interval)
+}
+
 impl<T> IntervalThrottler<T> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
         let ThrottleIntervalConfig { period, edge } = config;
+        let interval = throttle_interval(period);
         Self {
-            interval: (period > Duration::ZERO).then(|| tokio::time::interval(period)),
+            interval,
             edge,
             state: State::Idle,
             _marker: PhantomData,
