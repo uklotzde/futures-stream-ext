@@ -5,14 +5,17 @@
 
 # Same as the file name
 name: test
+
 permissions:
   contents: read
+
 on:
   pull_request:
   push:
     branches:
       - main
   workflow_dispatch:
+
 env:
   # Disable incremental compilation for faster from-scratch builds
   CARGO_INCREMENTAL: 0
@@ -20,6 +23,7 @@ env:
   CARGO_PROFILE_TEST_DEBUG: 0
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: short
+
 jobs:
   run:
     runs-on: ubuntu-latest
