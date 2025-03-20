@@ -10,7 +10,9 @@ readme = "README.md"
 repository = "https://github.com/uklotzde/futures-stream-ext"
 categories = ["asynchronous"]
 keywords = ["async", "stream"]
-edition = "2021"
+edition = "2024"
+# Keep in sync with `.github/workflows/audit-dependencies.yaml`.
+rust-version = "1.85"
 include = ["/src", "/README.md", "/LICENSES"]
 
 [dependencies]
@@ -32,6 +34,7 @@ let_underscore = "warn"
 missing_debug_implementations = "warn"
 rust_2018_idioms = "warn"
 rust_2021_compatibility = "warn"
+rust_2024_compatibility = "warn"
 unreachable_pub = "warn"
 unsafe_code = "warn"
 unused = "warn"
