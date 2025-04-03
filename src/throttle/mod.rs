@@ -117,7 +117,7 @@ where
                     Poll::Pending => {
                         break;
                     }
-                };
+                }
             }
         }
 
