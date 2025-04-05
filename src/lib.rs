@@ -8,9 +8,10 @@ use std::num::NonZeroUsize;
 
 use futures_core::Stream;
 
-mod dedup;
-pub use self::dedup::{
-    dedup_err_result_stream, dedup_ok_result_stream, dedup_stream, dedup_stream_memo,
+mod distinct;
+pub use self::distinct::{
+    distinct_until_changed_err_result_stream, distinct_until_changed_ok_result_stream,
+    distinct_until_changed_stream, distinct_until_changed_stream_memo,
 };
 
 mod throttle;
