@@ -10,7 +10,7 @@ use futures_util::StreamExt as _;
 /// All other stream items are discarded.
 ///
 /// See also: <https://rxmarbles.com/#distinctUntilChanged>
-pub fn distinct_until_changed_stream<S>(stream: S) -> impl Stream<Item = S::Item>
+pub fn distinct_until_changed<S>(stream: S) -> impl Stream<Item = S::Item>
 where
     S: Stream,
     S::Item: Clone + PartialEq,
@@ -35,7 +35,7 @@ where
 /// All `Err` stream items are passed through.
 ///
 /// See also: <https://rxmarbles.com/#distinctUntilChanged>
-pub fn distinct_until_changed_ok_result_stream<S, T, E>(stream: S) -> impl Stream<Item = S::Item>
+pub fn distinct_until_changed_ok_result<S, T, E>(stream: S) -> impl Stream<Item = S::Item>
 where
     S: Stream<Item = Result<T, E>>,
     T: Clone + PartialEq,
@@ -64,7 +64,7 @@ where
 /// All `Ok` stream items are passed through.
 ///
 /// See also: <https://rxmarbles.com/#distinctUntilChanged>
-pub fn distinct_until_changed_err_result_stream<S, T, E>(stream: S) -> impl Stream<Item = S::Item>
+pub fn distinct_until_changed_err_result<S, T, E>(stream: S) -> impl Stream<Item = S::Item>
 where
     S: Stream<Item = Result<T, E>>,
     E: Clone + PartialEq,
@@ -104,7 +104,7 @@ where
 /// to avoid a [`Clone`] trait bound on the _memo_ type.
 ///
 /// See also: <https://rxmarbles.com/#distinctUntilChanged>
-pub fn distinct_until_changed_stream_memo<S, M, F>(
+pub fn distinct_until_changed_memo<S, M, F>(
     stream: S,
     initial_memo: M,
     distinct_memo: M,

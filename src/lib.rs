@@ -10,8 +10,8 @@ use futures_core::Stream;
 
 mod distinct;
 pub use self::distinct::{
-    distinct_until_changed_err_result_stream, distinct_until_changed_ok_result_stream,
-    distinct_until_changed_stream, distinct_until_changed_stream_memo,
+    distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_memo,
+    distinct_until_changed_ok_result,
 };
 
 mod throttle;
