@@ -11,11 +11,6 @@ async fn distinct_until_changed() {
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
-    let actual_output_memo =
-        super::distinct_until_changed_memo(input, None, None, |next_item| Some(*next_item))
-            .collect::<Vec<_>>()
-            .await;
-    assert_eq!(expected_output, actual_output_memo);
 }
 
 #[tokio::test]
@@ -36,11 +31,6 @@ async fn distinct_until_changed_ok_result() {
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
-    let actual_output_memo =
-        super::distinct_until_changed_memo(input, None, None, |next_result| next_result.ok())
-            .collect::<Vec<_>>()
-            .await;
-    assert_eq!(expected_output, actual_output_memo);
 }
 
 #[tokio::test]
@@ -61,9 +51,4 @@ async fn distinct_until_changed_err_result() {
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
-    let actual_output_memo =
-        super::distinct_until_changed_memo(input, None, None, |next_result| next_result.err())
-            .collect::<Vec<_>>()
-            .await;
-    assert_eq!(expected_output, actual_output_memo);
 }

@@ -7,11 +7,11 @@
 use std::num::NonZeroUsize;
 
 use futures_core::Stream;
+use futures_util::StreamExt as _;
 
 mod distinct;
 pub use self::distinct::{
-    distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_memo,
-    distinct_until_changed_ok_result,
+    distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_ok_result,
 };
 
 mod throttle;
@@ -64,3 +64,31 @@ pub trait StreamExt: Stream {
 }
 
 impl<S: Stream> StreamExt for S {}
+
+fn filter_stateful<S, T, F, G>(
+    stream: S,
+    initial_state: T,
+    mut filter_update_state_fn: F,
+) -> impl Stream<Item = S::Item>
+where
+    S: Stream,
+    F: FnMut(&mut T, &S::Item) -> G,
+    G: Future<Output = bool>,
+{
+    let mut state = initial_state;
+    stream.filter(move |next_item| filter_update_state_fn(&mut state, next_item))
+}
+
+fn filter_stateful_sync<S, T, F>(
+    stream: S,
+    initial_state: T,
+    mut filter_update_state_fn: F,
+) -> impl Stream<Item = S::Item>
+where
+    S: Stream,
+    F: FnMut(&mut T, &S::Item) -> bool,
+{
+    filter_stateful(stream, initial_state, move |state, next_item| {
+        std::future::ready(filter_update_state_fn(state, next_item))
+    })
+}
