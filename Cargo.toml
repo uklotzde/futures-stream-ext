@@ -4,7 +4,7 @@
 [package]
 name = "futures-stream-ext"
 description = "Asynchronous stream extensions for the futures(-core) crate"
-version = "0.3.0"
+version = "0.4.0"
 license = "MPL-2.0"
 readme = "README.md"
 repository = "https://github.com/uklotzde/futures-stream-ext"
@@ -19,11 +19,11 @@ include = ["/src", "/README.md", "/LICENSES"]
 futures-core = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 pin-project-lite = "0.2.16"
-tokio = { version = "1.44.1", optional = true, features = ["time"] }
+tokio = { version = "1.44.2", optional = true, features = ["time"] }
 
 [dev-dependencies]
 futures = "0.3.31"
-tokio = { version = "1.44.1", features = ["macros", "rt", "test-util"] }
+tokio = { version = "1.44.2", features = ["macros", "rt", "test-util"] }
 
 [features]
 default = []
