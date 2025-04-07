@@ -36,46 +36,30 @@ where
     filter_stateful_sync(stream, None, filter_distinct_until_changed)
 }
 
-/// Maps and filters out subsequent/adjacent sequence items.
-///
-/// Operates on mapped values of sequence items.
-/// Each sequence item will be mapped once.
-///
-/// See also: [`filter_distinct_until_changed()`]
-pub fn filter_map_distinct_until_changed<T, U, F>(
-    map_fn: &mut F,
-    last_value: &mut Option<U>,
-    next_item: &T,
-) -> bool
-where
-    U: PartialEq,
-    F: FnMut(&T) -> U,
-{
-    let next_value = map_fn(next_item);
-    if let Some(last_value) = last_value {
-        if *last_value == next_value {
-            // Discard the next item.
-            return false;
-        }
-    }
-    *last_value = Some(next_value);
-    true
-}
-
 /// Filters out subsequent/adjacent stream items (mapped).
 ///
 /// Operates on mapped values of stream items.
 /// Each stream item will be mapped once.
+/// The last value is stored until a different value occurs.
 ///
 /// See also: [`distinct_until_changed()`]
-pub fn distinct_until_changed_map<S, T, F>(stream: S, mut map_fn: F) -> impl Stream<Item = S::Item>
+pub fn distinct_until_changed_map<S, T, F>(
+    stream: S,
+    initial_value: T,
+    mut map_fn: F,
+) -> impl Stream<Item = S::Item>
 where
     S: Stream,
     F: FnMut(&S::Item) -> T,
     T: PartialEq,
 {
-    filter_stateful_sync(stream, None, move |last_value, next_item| {
-        filter_map_distinct_until_changed(&mut map_fn, last_value, next_item)
+    filter_stateful_sync(stream, initial_value, move |last_value, next_item| {
+        let next_value = map_fn(next_item);
+        if *last_value == next_value {
+            return false;
+        }
+        *last_value = next_value;
+        true
     })
 }
 

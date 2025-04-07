@@ -14,7 +14,6 @@ pub use self::distinct::{
     distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_map,
     distinct_until_changed_ok_result, filter_distinct_until_changed,
     filter_distinct_until_changed_err_result, filter_distinct_until_changed_ok_result,
-    filter_map_distinct_until_changed,
 };
 
 mod throttle;
