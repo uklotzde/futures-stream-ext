@@ -11,7 +11,8 @@ use futures_util::StreamExt as _;
 
 mod distinct;
 pub use self::distinct::{
-    distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_ok_result,
+    distinct_until_changed, distinct_until_changed_err_result, distinct_until_changed_map,
+    distinct_until_changed_ok_result,
 };
 
 mod throttle;

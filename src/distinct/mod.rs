@@ -28,6 +28,31 @@ where
     })
 }
 
+/// Filters out subsequent/adjacent stream items.
+///
+/// Operates on mapped values of stream items.
+/// Each stream item will be mapped once.
+///
+/// See also: [`distinct_until_changed()`]
+pub fn distinct_until_changed_map<S, T, F>(stream: S, mut map_fn: F) -> impl Stream<Item = S::Item>
+where
+    S: Stream,
+    F: FnMut(&S::Item) -> T,
+    T: PartialEq,
+{
+    filter_stateful_sync(stream, None, move |last_value, next_item| {
+        let next_value = map_fn(next_item);
+        if let Some(last_value) = last_value {
+            if *last_value == next_value {
+                // Discard the next item.
+                return false;
+            }
+        }
+        *last_value = Some(next_value);
+        true
+    })
+}
+
 /// Filters out subsequent/adjacent `Ok` items in a result stream.
 ///
 /// Each distinct `Ok` stream item will be cloned once.
