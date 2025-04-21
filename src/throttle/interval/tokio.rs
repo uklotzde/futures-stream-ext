@@ -42,7 +42,7 @@ fn throttle_interval(period: Duration) -> Option<tokio::time::Interval> {
 
 impl<T> IntervalThrottler<T> {
     #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
         let ThrottleIntervalConfig { period, edge } = config;
         let interval = throttle_interval(period);
@@ -118,7 +118,7 @@ mod tests {
 
     const TIME_TICK: Duration = Duration::from_millis(1);
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     fn alternating_delay_stream(
         first_delay: Duration,
         second_delay: Duration,

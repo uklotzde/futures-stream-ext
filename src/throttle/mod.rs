@@ -65,7 +65,6 @@ where
     S: Stream,
     T: Throttler<<S as Stream>::Item>,
 {
-    #[allow(clippy::needless_pass_by_value)]
     pub const fn new(stream: S, throttler: T, poll_next_max_ready_count: NonZeroUsize) -> Self {
         Self {
             stream,
@@ -84,7 +83,6 @@ where
 {
     type Item = S::Item;
 
-    #[allow(unsafe_code)]
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
 
