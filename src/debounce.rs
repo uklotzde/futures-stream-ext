@@ -109,13 +109,13 @@ where
 
         let Some(poll_pending) = pending.as_mut().as_pin_mut() else {
             // No pending item.
-            if stream.is_none() {
+            return if stream.is_none() {
                 // Stream has finished.
-                return Poll::Ready(None);
+                Poll::Ready(None)
             } else {
                 // New stream items may arrive later.
-                return Poll::Pending;
-            }
+                Poll::Pending
+            };
         };
 
         let item = ready!(poll_pending.poll(cx));
