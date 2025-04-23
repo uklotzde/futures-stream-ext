@@ -4,7 +4,7 @@
 //! Extensions of the [`Stream`] trait and utilities for
 //! transforming or shaping streams.
 
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt as _;
@@ -15,6 +15,9 @@ pub use self::distinct::{
     distinct_until_changed_ok_result, filter_distinct_until_changed,
     filter_distinct_until_changed_err_result, filter_distinct_until_changed_ok_result,
 };
+
+mod debounce;
+pub use self::debounce::Debounced;
 
 mod throttle;
 pub use self::throttle::{Throttle, ThrottleIntervalConfig, Throttler};
@@ -30,10 +33,25 @@ pub enum IntervalEdge {
     Trailing,
 }
 
+pub trait Sleep: Future<Output = ()> + Sized {
+    /// Suspends the task for the given duration.
+    fn sleep(duration: Duration) -> Self;
+}
+
 /// Extension trait for [`Stream`].
 pub trait StreamExt: Stream {
+    /// Custom implementation of [`Sleep`].
+    type Sleep: Sleep;
+
     /// Return type of [`throttle_interval()`](Self::throttle_interval).
     type IntervalThrottler: Throttler<<Self as Stream>::Item>;
+
+    fn debounce(self, delay: Duration) -> Debounced<Self, Self::Sleep>
+    where
+        Self: Sized,
+    {
+        Debounced::new(self, delay)
+    }
 
     /// Throttles an input stream.
     ///
