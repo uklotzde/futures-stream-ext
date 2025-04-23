@@ -17,9 +17,11 @@ pub use self::distinct::{
 };
 
 mod throttle;
-#[cfg(feature = "tokio")]
-pub use self::throttle::IntervalThrottler;
 pub use self::throttle::{Throttle, ThrottleIntervalConfig, Throttler};
+
+#[cfg(feature = "tokio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
+pub mod tokio;
 
 /// Interval edge trigger variants
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -30,6 +32,9 @@ pub enum IntervalEdge {
 
 /// Extension trait for [`Stream`].
 pub trait StreamExt: Stream {
+    /// Return type of [`throttle_interval()`](Self::throttle_interval).
+    type IntervalThrottler: Throttler<<Self as Stream>::Item>;
+
     /// Throttles an input stream.
     ///
     /// The throttler defines the throttling strategy.
@@ -45,7 +50,7 @@ pub trait StreamExt: Stream {
     /// improves the performance and efficiency.
     fn throttle<T>(self, throttler: T, poll_next_max_ready_count: NonZeroUsize) -> Throttle<Self, T>
     where
-        Self: Stream + Sized,
+        Self: Sized,
         T: Throttler<Self::Item>,
     {
         Throttle::new(self, throttler, poll_next_max_ready_count)
@@ -54,22 +59,14 @@ pub trait StreamExt: Stream {
     /// Throttles an input stream by using a fixed interval.
     ///
     /// See also: [`throttle()`](Self::throttle)
-    #[cfg(feature = "tokio")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
     fn throttle_interval(
         self,
         config: ThrottleIntervalConfig,
         poll_next_max_ready_count: std::num::NonZeroUsize,
-    ) -> Throttle<Self, IntervalThrottler<Self::Item>>
+    ) -> Throttle<Self, Self::IntervalThrottler>
     where
-        Self: Stream + Sized,
-    {
-        let throttler = IntervalThrottler::new(config);
-        self.throttle(throttler, poll_next_max_ready_count)
-    }
+        Self: Sized;
 }
-
-impl<S: Stream> StreamExt for S {}
 
 fn filter_stateful<S, T, F, G>(
     stream: S,

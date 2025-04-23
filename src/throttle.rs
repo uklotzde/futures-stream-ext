@@ -5,15 +5,13 @@ use std::{
     num::NonZeroUsize,
     pin::Pin,
     task::{Context, Poll, ready},
+    time::Duration,
 };
 
 use futures_core::stream::Stream;
 use pin_project_lite::pin_project;
 
-mod interval;
-#[cfg(feature = "tokio")]
-pub use self::interval::IntervalThrottler;
-pub use self::interval::ThrottleIntervalConfig;
+use crate::IntervalEdge;
 
 /// Callbacks for throttling a stream
 pub trait Throttler<T>: Stream<Item = ()> {
@@ -150,4 +148,19 @@ where
             State::Finished => panic!("stream polled after completion"),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThrottleIntervalConfig {
+    /// Throttling period
+    ///
+    /// The minimum interval between subsequent items that limits the
+    /// maximum frequency of the output stream.
+    pub period: Duration,
+
+    /// Interval edge gate
+    ///
+    /// Controls whether the pending item of the stream is yielded
+    /// immediately or after the interval has elapsed.
+    pub edge: IntervalEdge,
 }
