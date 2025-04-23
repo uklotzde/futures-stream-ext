@@ -15,7 +15,7 @@ use tokio::time::{Interval, MissedTickBehavior, interval};
 use crate::{IntervalEdge, ThrottleIntervalConfig, Throttler};
 
 #[derive(Debug, Clone, Copy)]
-enum ThrottlerState {
+enum IntervalThrottlerState {
     Idle,
     Pending,
 }
@@ -27,7 +27,7 @@ pin_project! {
         config: ThrottleIntervalConfig,
         #[pin]
         interval: Option<Interval>,
-        state: ThrottlerState,
+        state: IntervalThrottlerState,
         _marker: PhantomData<T>,
     }
 }
@@ -48,7 +48,7 @@ impl<T> IntervalThrottler<T> {
         Self {
             config,
             interval,
-            state: ThrottlerState::Idle,
+            state: IntervalThrottlerState::Idle,
             _marker: PhantomData,
         }
     }
@@ -65,8 +65,8 @@ impl<T> Stream for IntervalThrottler<T> {
             _marker,
         } = self.project();
         match state {
-            ThrottlerState::Idle => Poll::Pending,
-            ThrottlerState::Pending => interval
+            IntervalThrottlerState::Idle => Poll::Pending,
+            IntervalThrottlerState::Pending => interval
                 .as_pin_mut()
                 .as_mut()
                 .map_or(Poll::Ready(Some(())), |interval| {
@@ -85,8 +85,8 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
             _marker,
         } = self.project();
         match state {
-            ThrottlerState::Idle => {
-                *state = ThrottlerState::Pending;
+            IntervalThrottlerState::Idle => {
+                *state = IntervalThrottlerState::Pending;
                 let Some(mut interval) = interval.as_pin_mut() else {
                     return;
                 };
@@ -99,7 +99,7 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
                     }
                 }
             }
-            ThrottlerState::Pending => (),
+            IntervalThrottlerState::Pending => (),
         }
     }
 
@@ -111,10 +111,10 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
             _marker,
         } = self.project();
         match state {
-            ThrottlerState::Idle => unreachable!(),
-            ThrottlerState::Pending => {
+            IntervalThrottlerState::Idle => unreachable!(),
+            IntervalThrottlerState::Pending => {
                 if next_item.is_none() {
-                    *state = ThrottlerState::Idle;
+                    *state = IntervalThrottlerState::Idle;
                 }
             }
         }
