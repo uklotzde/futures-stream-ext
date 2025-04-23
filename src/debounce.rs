@@ -96,10 +96,6 @@ where
                 }
                 // Stream has finished and must not be polled again.
                 stream.set(None);
-                if last_item.is_none() && pending.is_none() {
-                    // Finished if no item is pending.
-                    return Poll::Ready(None);
-                }
                 break;
             }
 
@@ -113,8 +109,15 @@ where
 
         let Some(poll_pending) = pending.as_mut().as_pin_mut() else {
             // No pending item.
-            return Poll::Pending;
+            if stream.is_none() {
+                // Stream has finished.
+                return Poll::Ready(None);
+            } else {
+                // New stream items may arrive later.
+                return Poll::Pending;
+            }
         };
+
         let item = ready!(poll_pending.poll(cx));
         // The future must not be polled again after it became ready.
         pending.set(None);
