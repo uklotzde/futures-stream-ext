@@ -24,9 +24,9 @@ pin_project! {
     #[derive(Debug)]
     #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<T> {
+        config: ThrottleIntervalConfig,
         #[pin]
         interval: Option<Interval>,
-        edge: IntervalEdge,
         state: ThrottlerState,
         _marker: PhantomData<T>,
     }
@@ -45,11 +45,10 @@ impl<T> IntervalThrottler<T> {
     #[must_use]
     #[expect(clippy::needless_pass_by_value)]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
-        let ThrottleIntervalConfig { period, edge } = config;
-        let interval = throttle_interval(period);
+        let interval = throttle_interval(config.period);
         Self {
+            config,
             interval,
-            edge,
             state: ThrottlerState::Idle,
             _marker: PhantomData,
         }
@@ -61,8 +60,8 @@ impl<T> Stream for IntervalThrottler<T> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let IntervalThrottlerProjection {
+            config: _,
             interval,
-            edge: _,
             state,
             _marker,
         } = self.project();
@@ -81,8 +80,8 @@ impl<T> Stream for IntervalThrottler<T> {
 impl<T> Throttler<T> for IntervalThrottler<T> {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
         let IntervalThrottlerProjection {
+            config: ThrottleIntervalConfig { period: _, edge },
             interval,
-            edge,
             state,
             _marker,
         } = self.project();
@@ -107,8 +106,8 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
         let IntervalThrottlerProjection {
+            config: _,
             interval: _,
-            edge: _,
             state,
             _marker,
         } = self.project();
