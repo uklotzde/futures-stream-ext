@@ -43,7 +43,6 @@ fn throttle_interval(period: Duration) -> Option<Interval> {
 
 impl<T> IntervalThrottler<T> {
     #[must_use]
-    #[expect(clippy::needless_pass_by_value)]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
         let interval = throttle_interval(config.period);
         Self {
