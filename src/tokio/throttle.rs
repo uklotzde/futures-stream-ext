@@ -10,46 +10,45 @@ use std::{
 
 use futures_core::Stream;
 use pin_project_lite::pin_project;
-use tokio::time::Interval;
+use tokio::time::{Interval, MissedTickBehavior, interval};
 
 use crate::{IntervalEdge, ThrottleIntervalConfig, Throttler};
 
 #[derive(Debug, Clone, Copy)]
-enum State {
+enum IntervalThrottlerState {
     Idle,
     Pending,
 }
 
 pin_project! {
     #[derive(Debug)]
+    #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<T> {
+        config: ThrottleIntervalConfig,
         #[pin]
         interval: Option<Interval>,
-        edge: IntervalEdge,
-        state: State,
+        state: IntervalThrottlerState,
         _marker: PhantomData<T>,
     }
 }
 
-fn throttle_interval(period: Duration) -> Option<tokio::time::Interval> {
+fn throttle_interval(period: Duration) -> Option<Interval> {
     if period.is_zero() {
         return None;
     }
-    let mut interval = tokio::time::interval(period);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut interval = interval(period);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     Some(interval)
 }
 
 impl<T> IntervalThrottler<T> {
     #[must_use]
-    #[expect(clippy::needless_pass_by_value)]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
-        let ThrottleIntervalConfig { period, edge } = config;
-        let interval = throttle_interval(period);
+        let interval = throttle_interval(config.period);
         Self {
+            config,
             interval,
-            edge,
-            state: State::Idle,
+            state: IntervalThrottlerState::Idle,
             _marker: PhantomData,
         }
     }
@@ -59,11 +58,15 @@ impl<T> Stream for IntervalThrottler<T> {
     type Item = ();
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.project();
-        match this.state {
-            State::Idle => Poll::Pending,
-            State::Pending => this
-                .interval
+        let IntervalThrottlerProjection {
+            config: _,
+            interval,
+            state,
+            _marker,
+        } = self.project();
+        match state {
+            IntervalThrottlerState::Idle => Poll::Pending,
+            IntervalThrottlerState::Pending => interval
                 .as_pin_mut()
                 .as_mut()
                 .map_or(Poll::Ready(Some(())), |interval| {
@@ -75,14 +78,19 @@ impl<T> Stream for IntervalThrottler<T> {
 
 impl<T> Throttler<T> for IntervalThrottler<T> {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
-        let this = self.project();
-        match this.state {
-            State::Idle => {
-                *this.state = State::Pending;
-                let Some(mut interval) = this.interval.as_pin_mut() else {
+        let IntervalThrottlerProjection {
+            config: ThrottleIntervalConfig { period: _, edge },
+            interval,
+            state,
+            _marker,
+        } = self.project();
+        match state {
+            IntervalThrottlerState::Idle => {
+                *state = IntervalThrottlerState::Pending;
+                let Some(mut interval) = interval.as_pin_mut() else {
                     return;
                 };
-                match this.edge {
+                match edge {
                     IntervalEdge::Leading => {
                         interval.reset_immediately();
                     }
@@ -91,17 +99,22 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
                     }
                 }
             }
-            State::Pending => (),
+            IntervalThrottlerState::Pending => (),
         }
     }
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
-        let this = self.project();
-        match this.state {
-            State::Idle => unreachable!(),
-            State::Pending => {
+        let IntervalThrottlerProjection {
+            config: _,
+            interval: _,
+            state,
+            _marker,
+        } = self.project();
+        match state {
+            IntervalThrottlerState::Idle => unreachable!(),
+            IntervalThrottlerState::Pending => {
                 if next_item.is_none() {
-                    *this.state = State::Idle;
+                    *state = IntervalThrottlerState::Idle;
                 }
             }
         }
@@ -112,8 +125,11 @@ impl<T> Throttler<T> for IntervalThrottler<T> {
 mod tests {
     use std::{num::NonZeroUsize, time::Duration};
 
-    use futures::{Stream, StreamExt as _};
-    use tokio::time::Instant;
+    use futures::{Stream, StreamExt as _, stream};
+    use tokio::{
+        runtime,
+        time::{self, Instant, sleep_until},
+    };
 
     use crate::{IntervalEdge, StreamExt as _, ThrottleIntervalConfig};
 
@@ -125,10 +141,10 @@ mod tests {
         first_delay: Duration,
         second_delay: Duration,
     ) -> impl Stream<Item = usize> {
-        futures::stream::iter(0..).filter(move |&i| async move {
+        stream::iter(0..).filter(move |&i| async move {
             // The first items is yielded immediately, all subsequent items are delayed
             // by a fixed amount between each other.
-            tokio::time::sleep_until(
+            sleep_until(
                 started_at
                     + first_delay.saturating_mul((i + 1) as u32 / 2)
                     + second_delay.saturating_mul(i as u32 / 2),
@@ -144,24 +160,25 @@ mod tests {
         second_delay: Duration,
         num_items: usize,
     ) -> Vec<(u128, usize)> {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = runtime::Builder::new_current_thread()
             .enable_time()
             .start_paused(true)
             .build()
             .unwrap();
+        let rt_handle = rt.handle();
         rt.block_on(async move {
-            let started_at = tokio::time::Instant::now();
-            let handle = tokio::spawn(
+            let started_at = Instant::now();
+            let join_handle = rt_handle.spawn(
                 alternating_delay_stream(started_at, first_delay, second_delay)
                     .throttle_interval(config, NonZeroUsize::MIN)
                     .map(move |item| ((Instant::now() - started_at).as_millis(), item))
                     .take(num_items)
                     .collect::<Vec<_>>(),
             );
-            tokio::spawn(async move {
-                tokio::time::advance(TIME_TICK).await;
+            rt_handle.spawn(async move {
+                time::advance(TIME_TICK).await;
             });
-            handle.await.unwrap()
+            join_handle.await.unwrap()
         })
     }
 
