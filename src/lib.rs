@@ -17,7 +17,7 @@ pub use self::distinct::{
 };
 
 mod throttle;
-pub use self::throttle::{Throttle, ThrottleIntervalConfig, Throttler};
+pub use self::throttle::{ThrottleIntervalConfig, Throttled, Throttler};
 
 #[cfg(feature = "tokio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
@@ -48,12 +48,16 @@ pub trait StreamExt: Stream {
     /// could be used as a save default. Using a greater value to skip multiple
     /// items at once will reduce the number of calls to the throttler and
     /// improves the performance and efficiency.
-    fn throttle<T>(self, throttler: T, poll_next_max_ready_count: NonZeroUsize) -> Throttle<Self, T>
+    fn throttle<T>(
+        self,
+        throttler: T,
+        poll_next_max_ready_count: NonZeroUsize,
+    ) -> Throttled<Self, T>
     where
         Self: Sized,
         T: Throttler<Self::Item>,
     {
-        Throttle::new(self, throttler, poll_next_max_ready_count)
+        Throttled::new(self, throttler, poll_next_max_ready_count)
     }
 
     /// Throttles an input stream by using a fixed interval.
@@ -63,7 +67,7 @@ pub trait StreamExt: Stream {
         self,
         config: ThrottleIntervalConfig,
         poll_next_max_ready_count: std::num::NonZeroUsize,
-    ) -> Throttle<Self, Self::IntervalThrottler>
+    ) -> Throttled<Self, Self::IntervalThrottler>
     where
         Self: Sized;
 }

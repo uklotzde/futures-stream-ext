@@ -3,7 +3,7 @@
 
 use futures_core::Stream;
 
-use crate::{StreamExt, Throttle, ThrottleIntervalConfig};
+use crate::{StreamExt, ThrottleIntervalConfig, Throttled};
 
 mod throttle;
 pub use self::throttle::IntervalThrottler;
@@ -15,7 +15,7 @@ impl<S: Stream> StreamExt for S {
         self,
         config: ThrottleIntervalConfig,
         poll_next_max_ready_count: std::num::NonZeroUsize,
-    ) -> Throttle<Self, Self::IntervalThrottler>
+    ) -> Throttled<Self, Self::IntervalThrottler>
     where
         Self: Sized,
     {
