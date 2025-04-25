@@ -47,7 +47,7 @@ pin_project! {
     /// Throttled stream
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled or .awaited"]
-    pub struct Throttle<S: Stream, T: Throttler<<S as Stream>::Item>> {
+    pub struct Throttled<S: Stream, T: Throttler<<S as Stream>::Item>> {
         #[pin]
         stream: S,
         #[pin]
@@ -58,7 +58,7 @@ pin_project! {
     }
 }
 
-impl<S, T> Throttle<S, T>
+impl<S, T> Throttled<S, T>
 where
     S: Stream,
     T: Throttler<<S as Stream>::Item>,
@@ -74,7 +74,7 @@ where
     }
 }
 
-impl<S, T> Stream for Throttle<S, T>
+impl<S, T> Stream for Throttled<S, T>
 where
     S: Stream,
     T: Throttler<<S as Stream>::Item>,
