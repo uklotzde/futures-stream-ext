@@ -69,7 +69,7 @@ mod tests {
             (163, 9),
         ];
         assert_eq!(
-            &run_periodic_stream_debounced(debounce_delay, item_period, expected.len(),),
+            &run_periodic_stream_debounced(debounce_delay, item_period, expected.len()),
             &expected
         );
     }
