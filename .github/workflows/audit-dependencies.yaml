@@ -10,9 +10,16 @@ permissions:
   contents: read
 
 on:
-  push:
+  pull_request:
+    # The audit check should only look at crates and their specific versions
+    # which are defined through these files. Since the `pull_request` trigger
+    # runs on every commit for every open pull request, we want to avoid
+    # unnecessary runs.
     paths:
       - "**/Cargo.toml"
+  push:
+    branches:
+      - main
   schedule:
     # Weekly, i.e. on Sunday at 13:37 UTC
     - cron: "37 13 * * 0"
