@@ -72,7 +72,7 @@ pub trait StreamExt: Stream {
     /// could be used as a save default. Using a greater value to skip multiple
     /// items at once will reduce the number of calls to the throttler and
     /// improves the performance and efficiency.
-    fn throttle<T>(
+    fn throttle_with<T>(
         self,
         throttler: T,
         poll_next_max_ready_count: NonZeroUsize,
@@ -86,7 +86,7 @@ pub trait StreamExt: Stream {
 
     /// Throttles an input stream by using a fixed interval.
     ///
-    /// See also: [`throttle()`](Self::throttle)
+    /// See also: [`throttle_with()`](Self::throttle_with)
     fn throttle_interval(
         self,
         config: ThrottleIntervalConfig,
