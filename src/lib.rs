@@ -55,9 +55,13 @@ pub trait StreamExt: Stream {
     /// Otherwise consumers might consider items from a stream as stale
     /// after the stream finished.
     ///
+    /// This method is used to "terminate" a finite stream by extending
+    /// it indefinitely. [`StreamExt::fuse()`](futures_util::StreamExt::fuse)
+    /// serves a similar purpose but with the opposite behavior.
+    ///
     /// Use case: An infinite stream of snapshots where each new item invalidates
     /// the last and all previous items.
-    fn retain(self) -> Chain<Self, Pending<<Self as Stream>::Item>>
+    fn pend(self) -> Chain<Self, Pending<<Self as Stream>::Item>>
     where
         Self: Sized,
     {
