@@ -32,6 +32,6 @@ impl<S: Stream> StreamExt for S {
         Self: Sized,
     {
         let throttler = IntervalThrottler::new(config);
-        self.throttle(throttler, poll_next_max_ready_count)
+        self.throttle_with(throttler, poll_next_max_ready_count)
     }
 }
