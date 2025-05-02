@@ -46,6 +46,12 @@ pub trait StreamExt: Stream {
     /// Return type of [`throttle_interval()`](Self::throttle_interval).
     type IntervalThrottler: Throttler<<Self as Stream>::Item>;
 
+    /// Debounces an input stream.
+    ///
+    /// Delays items until no more new items have arrived during the delay window.
+    ///
+    /// Filters out items that arrive in quick succession. Only the last item from
+    /// each sequence is emitted. All preceding items are discarded.
     fn debounce(self, delay: Duration) -> Debounced<Self, Self::Sleep>
     where
         Self: Sized,
