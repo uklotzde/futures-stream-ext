@@ -7,7 +7,10 @@
 use std::{num::NonZeroUsize, time::Duration};
 
 use futures_core::Stream;
-use futures_util::StreamExt as _;
+use futures_util::{
+    StreamExt as _,
+    stream::{Chain, Pending},
+};
 
 mod distinct;
 pub use self::distinct::{
@@ -45,6 +48,25 @@ pub trait StreamExt: Stream {
 
     /// Return type of [`throttle_interval()`](Self::throttle_interval).
     type IntervalThrottler: Throttler<<Self as Stream>::Item>;
+
+    /// Prevents the stream from finishing.
+    ///
+    /// The stream remains pending after the input stream finished.
+    /// Otherwise consumers might consider items from a stream as stale
+    /// after the stream finished.
+    ///
+    /// This method is used to "terminate" a finite stream by extending
+    /// it indefinitely. [`StreamExt::fuse()`](futures_util::StreamExt::fuse)
+    /// serves a similar purpose but with the opposite behavior.
+    ///
+    /// Use case: An infinite stream of snapshots where each new item invalidates
+    /// the last and all previous items.
+    fn pend(self) -> Chain<Self, Pending<<Self as Stream>::Item>>
+    where
+        Self: Sized,
+    {
+        self.chain(futures_util::stream::pending())
+    }
 
     /// Debounces an input stream.
     ///
