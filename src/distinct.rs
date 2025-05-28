@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use futures_core::Stream;
+use futures_util::Stream;
 
 use crate::filter_stateful_sync;
 

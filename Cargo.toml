@@ -16,7 +16,6 @@ rust-version = "1.85"
 include = ["/src", "/README.md", "/LICENSES"]
 
 [dependencies]
-futures-core = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 pin-project-lite = "0.2.16"
 tokio = { version = "1.44.2", optional = true, features = ["time"] }
