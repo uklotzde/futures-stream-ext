@@ -6,8 +6,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use futures_core::Stream;
-use futures_util::StreamExt as _;
+use futures_util::{Stream, StreamExt as _};
 
 mod distinct;
 pub use self::distinct::{

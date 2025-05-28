@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use futures_core::Stream;
+use futures_util::Stream;
 use pin_project_lite::pin_project;
 
 use crate::Sleep;
