@@ -15,11 +15,11 @@ pub fn filter_distinct_until_changed<T>(last_item: &mut Option<T>, next_item: &T
 where
     T: Clone + PartialEq,
 {
-    if let Some(last_item) = last_item {
-        if last_item == next_item {
-            // Discard the next item.
-            return false;
-        }
+    if let Some(last_item) = last_item
+        && last_item == next_item
+    {
+        // Discard the next item.
+        return false;
     }
     *last_item = Some(next_item.clone());
     true
@@ -78,11 +78,11 @@ where
     T: Clone + PartialEq,
 {
     if let Ok(next_ok) = &next_result {
-        if let Some(last_ok) = &last_ok {
-            if last_ok == next_ok {
-                // Discard the next item.
-                return false;
-            }
+        if let Some(last_ok) = &last_ok
+            && last_ok == next_ok
+        {
+            // Discard the next item.
+            return false;
         }
         *last_ok = Some(next_ok.clone());
     } else {
@@ -117,11 +117,11 @@ where
     E: Clone + PartialEq,
 {
     if let Err(next_err) = &next_result {
-        if let Some(last_err) = &last_err {
-            if last_err == next_err {
-                // Discard the next item.
-                return false;
-            }
+        if let Some(last_err) = &last_err
+            && last_err == next_err
+        {
+            // Discard the next item.
+            return false;
         }
         *last_err = Some(next_err.clone());
     } else {
