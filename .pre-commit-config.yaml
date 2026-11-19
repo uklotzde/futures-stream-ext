@@ -61,7 +61,6 @@ repos:
   #  hooks:
   #    - id: taplo-lint
   # Licensing: https://reuse.software
-  # Licensing: https://reuse.software
   - repo: https://github.com/fsfe/reuse-tool
     rev: v6.3.0
     hooks:
