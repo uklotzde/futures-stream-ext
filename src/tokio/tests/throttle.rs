@@ -133,7 +133,7 @@ async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_
 }
 
 #[tokio::test(start_paused = true)]
-async fn leading_edge_sequence() {
+async fn should_throttle_on_the_leading_edge() {
     // ms:   0 | 20 | 30 | 50 | 60 | 80 | 90 | 110 | 120 | 140 | 150 | 170 | 180 | 200 | 210 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 | ...
     let odd_item_delay = TIME_TICK.saturating_mul(20);
@@ -169,7 +169,7 @@ async fn leading_edge_sequence() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn trailing_edge_sequence() {
+async fn should_throttle_on_the_trailing_edge() {
     // ms:   0 | 10 | 30 | 40 | 60 | 70 | 90 | 100 | 120 | 130 | 150 | 160 | 180 | 190 | 210 | 220 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 |  15 | ...
     let odd_item_delay = TIME_TICK.saturating_mul(10);
@@ -204,7 +204,7 @@ async fn trailing_edge_sequence() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn trailing_edge_sequence_long_second_delay() {
+async fn should_throttle_on_the_trailing_edge_with_long_pauses() {
     // ms:   0 | 10 | 110 | 120 | 220 | 230 | 330 | 340 | ...
     // item: 0 |  1 |   2 |   3 |   4 |   5 |   6 |   7 | ...
     let odd_item_delay = TIME_TICK.saturating_mul(10);

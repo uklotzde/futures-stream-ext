@@ -34,9 +34,9 @@ impl Sleep for NoSleep {
 
 /// A [`Throttler`] that is always ready.
 #[derive(Debug)]
-struct NoThrottle;
+struct NoThrottler;
 
-impl Stream for NoThrottle {
+impl Stream for NoThrottler {
     type Item = ();
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -44,7 +44,7 @@ impl Stream for NoThrottle {
     }
 }
 
-impl<T> Throttler<T> for NoThrottle {
+impl<T> Throttler<T> for NoThrottler {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {}
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, _next_item: Option<&T>) {}
@@ -73,14 +73,14 @@ async fn debounce_with_sleep_should_limit_polling_of_ready_items() {
 #[tokio::test]
 async fn throttle_should_pass_through_all_items_if_always_ready() {
     let actual_output = stream::iter([1, 2, 3])
-        .throttle(NoThrottle, NonZeroUsize::MIN)
+        .throttle(NoThrottler, NonZeroUsize::MIN)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(vec![1, 2, 3], actual_output);
 }
 
 #[test]
-fn next_period_delay_on_schedule() {
+fn next_period_delay_should_stay_on_schedule() {
     let period = Duration::from_millis(10);
     // Polled immediately or late, but within the next period.
     for (elapsed_millis, expected_millis) in [(0, 10), (1, 9), (9, 1)] {
@@ -92,7 +92,7 @@ fn next_period_delay_on_schedule() {
 }
 
 #[test]
-fn next_period_delay_skips_missed_periods() {
+fn next_period_delay_should_skip_missed_periods() {
     let period = Duration::from_millis(10);
     for (elapsed_millis, expected_millis) in [(10, 10), (15, 5), (25, 5), (30, 10)] {
         assert_eq!(

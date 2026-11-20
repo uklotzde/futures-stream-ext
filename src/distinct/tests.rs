@@ -4,7 +4,7 @@
 use futures_util::StreamExt as _;
 
 #[tokio::test]
-async fn distinct_until_changed() {
+async fn should_filter_out_adjacent_duplicates() {
     let input = futures_util::stream::iter([1, 1, 2, 1, 2, 2, 2, 3, 3]);
     let expected_output = vec![1, 2, 1, 2, 3];
     let actual_output = super::distinct_until_changed(input)
@@ -14,7 +14,7 @@ async fn distinct_until_changed() {
 }
 
 #[tokio::test]
-async fn distinct_until_changed_by_key() {
+async fn should_filter_out_adjacent_items_with_the_same_key() {
     let input = futures_util::stream::iter([1, 1, 2, 1, 2, 2, 4, 5, 2, 3, 3, 7]);
     let expected_output = vec![1, 2, 1, 2, 4, 2, 7];
     let actual_output = super::distinct_until_changed_by_key(input, None, |item| Some(item / 2))
@@ -24,7 +24,7 @@ async fn distinct_until_changed_by_key() {
 }
 
 #[tokio::test]
-async fn distinct_until_changed_ok_result() {
+async fn should_filter_out_adjacent_duplicate_ok_items() {
     let input = futures_util::stream::iter([
         Ok(1),
         Ok(1),
@@ -44,7 +44,7 @@ async fn distinct_until_changed_ok_result() {
 }
 
 #[tokio::test]
-async fn distinct_until_changed_err_result() {
+async fn should_filter_out_adjacent_duplicate_err_items() {
     let input = futures_util::stream::iter([
         Err(1),
         Err(1),
