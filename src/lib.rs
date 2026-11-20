@@ -24,7 +24,7 @@ mod debounce;
 pub use self::debounce::Debounced;
 
 mod throttle;
-pub use self::throttle::{IntervalThrottler, ThrottleIntervalConfig, Throttled, Throttler};
+pub use self::throttle::{IntervalThrottler, IntervalThrottlerConfig, Throttled, Throttler};
 
 #[cfg(feature = "tokio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
@@ -252,7 +252,7 @@ pub trait StreamExt: Stream {
     /// See also: [`throttle()`](Self::throttle)
     fn throttle_interval_with_sleep<S: Sleep>(
         self,
-        config: ThrottleIntervalConfig,
+        config: IntervalThrottlerConfig,
         poll_next_max_ready_count: NonZeroUsize,
     ) -> Throttled<Self, IntervalThrottler<S>>
     where

@@ -122,7 +122,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ThrottleIntervalConfig {
+pub struct IntervalThrottlerConfig {
     /// Throttling period
     ///
     /// The minimum interval between subsequent items that limits the
@@ -155,7 +155,7 @@ pin_project! {
     #[derive(Debug)]
     #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<S> {
-        config: ThrottleIntervalConfig,
+        config: IntervalThrottlerConfig,
         // Created on demand and reused afterwards.
         #[pin]
         sleep: Option<S>,
@@ -165,7 +165,7 @@ pin_project! {
 
 impl<S: Sleep> IntervalThrottler<S> {
     #[must_use]
-    pub const fn new(config: ThrottleIntervalConfig) -> Self {
+    pub const fn new(config: IntervalThrottlerConfig) -> Self {
         Self {
             config,
             sleep: None,
