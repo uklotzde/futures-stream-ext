@@ -12,8 +12,11 @@ use crate::{Debounced, StreamExt as _, ThrottleIntervalConfig, Throttled};
 #[cfg(test)]
 mod debounce;
 
+#[cfg(test)]
 mod throttle;
-pub use self::throttle::IntervalThrottler;
+
+/// [`IntervalThrottler`](crate::IntervalThrottler) using [`tokio::time::Sleep`].
+pub type IntervalThrottler = crate::IntervalThrottler<tokio::time::Sleep>;
 
 impl crate::Sleep for tokio::time::Sleep {
     fn sleep(duration: Duration) -> Self {
@@ -35,18 +38,18 @@ pub trait StreamExt: Stream {
         self.debounce_with_sleep(delay)
     }
 
-    /// Throttles an input stream by using a fixed interval.
+    /// Throttles an input stream by using a fixed interval with [`tokio::time::Sleep`].
     ///
-    /// See also: [`throttle()`](crate::StreamExt::throttle)
+    /// See also: [`throttle_interval_with_sleep()`](crate::StreamExt::throttle_interval_with_sleep)
     fn throttle_interval(
         self,
         config: ThrottleIntervalConfig,
         poll_next_max_ready_count: NonZeroUsize,
-    ) -> Throttled<Self, IntervalThrottler<Self::Item>>
+    ) -> Throttled<Self, IntervalThrottler>
     where
         Self: Sized,
     {
-        self.throttle(IntervalThrottler::new(config), poll_next_max_ready_count)
+        self.throttle_interval_with_sleep(config, poll_next_max_ready_count)
     }
 }
 
