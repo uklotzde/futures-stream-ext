@@ -46,6 +46,18 @@ pub trait Sleep: Future<Output = ()> + Sized {
     fn reset(mut self: Pin<&mut Self>, duration: Duration) {
         self.set(Self::sleep(duration));
     }
+
+    /// Restarts the elapsed sleep for the next period of a fixed schedule.
+    ///
+    /// The next deadline should be the previous deadline plus `period`,
+    /// independent of when the sleep has been polled. Missed periods
+    /// should be skipped.
+    ///
+    /// The default implementation invokes [`reset()`](Self::reset) and
+    /// starts the next period from now, i.e. the schedule may drift.
+    fn reset_next_period(self: Pin<&mut Self>, period: Duration) {
+        self.reset(period);
+    }
 }
 
 /// Resets the sleep or creates a new one if none exists yet.

@@ -27,6 +27,33 @@ impl crate::Sleep for tokio::time::Sleep {
         // Reuses the registered timer.
         tokio::time::Sleep::reset(self, tokio::time::Instant::now() + duration);
     }
+
+    fn reset_next_period(self: Pin<&mut Self>, period: Duration) {
+        let now = tokio::time::Instant::now();
+        let deadline = next_period_deadline(self.deadline(), now, period);
+        tokio::time::Sleep::reset(self, deadline);
+    }
+}
+
+/// Next deadline on a fixed schedule with missed periods skipped.
+///
+/// Similar to [`tokio::time::MissedTickBehavior::Skip`], but without
+/// any tolerance for slightly delayed ticks.
+fn next_period_deadline(
+    deadline: tokio::time::Instant,
+    now: tokio::time::Instant,
+    period: Duration,
+) -> tokio::time::Instant {
+    debug_assert!(!period.is_zero());
+    let next_deadline = deadline + period;
+    if next_deadline > now {
+        return next_deadline;
+    }
+    // Skip missed periods and align with the schedule.
+    let behind_nanos = (now - deadline).as_nanos() % period.as_nanos();
+    let behind =
+        Duration::from_nanos(u64::try_from(behind_nanos).expect("remainder is less than period"));
+    now + period - behind
 }
 
 /// Extension trait for [`Stream`] using the Tokio runtime.
@@ -59,3 +86,39 @@ pub trait StreamExt: Stream {
 }
 
 impl<S: Stream> StreamExt for S {}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::time::Instant;
+
+    use super::next_period_deadline;
+
+    #[test]
+    fn next_period_deadline_on_schedule() {
+        let deadline = Instant::now();
+        let period = Duration::from_millis(10);
+        // Polled immediately or late, but within the next period.
+        for delay_millis in [0, 1, 9] {
+            let now = deadline + Duration::from_millis(delay_millis);
+            assert_eq!(
+                deadline + period,
+                next_period_deadline(deadline, now, period)
+            );
+        }
+    }
+
+    #[test]
+    fn next_period_deadline_skips_missed_periods() {
+        let deadline = Instant::now();
+        let period = Duration::from_millis(10);
+        for (delay_millis, expected_millis) in [(10, 20), (15, 20), (25, 30), (30, 40)] {
+            let now = deadline + Duration::from_millis(delay_millis);
+            assert_eq!(
+                deadline + Duration::from_millis(expected_millis),
+                next_period_deadline(deadline, now, period)
+            );
+        }
+    }
+}

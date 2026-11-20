@@ -171,9 +171,9 @@ enum IntervalThrottlerState {
 pin_project! {
     /// Throttles a stream by using a fixed interval.
     ///
-    /// The interval is implemented by the given [`Sleep`] type. Each interval
-    /// starts when the previous interval has elapsed and the throttler has been
-    /// polled, i.e. intervals are never shorter than the configured period.
+    /// The interval is implemented by the given [`Sleep`] type. While items are
+    /// pending, intervals follow a fixed schedule with missed intervals skipped
+    /// (see [`Sleep::reset_next_period()`]).
     #[derive(Debug)]
     #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<S> {
@@ -221,7 +221,7 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let IntervalThrottlerProjection {
             config,
-            mut sleep,
+            sleep,
             sleep_armed,
             state,
         } = self.project();
@@ -229,13 +229,14 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
             IntervalThrottlerState::Idle => Poll::Pending,
             IntervalThrottlerState::Pending => {
                 if *sleep_armed {
-                    let sleep = sleep
-                        .as_mut()
-                        .as_pin_mut()
-                        .expect("sleep must exist while armed");
-                    ready!(sleep.poll(cx));
+                    let mut sleep = sleep.as_pin_mut().expect("sleep must exist while armed");
+                    ready!(sleep.as_mut().poll(cx));
+                    // Continue on a fixed schedule.
+                    sleep.reset_next_period(config.period);
+                } else {
+                    // The first tick or no throttling.
+                    restart_interval(sleep, sleep_armed, config.period);
                 }
-                restart_interval(sleep, sleep_armed, config.period);
                 Poll::Ready(Some(()))
             }
         }
