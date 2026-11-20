@@ -40,18 +40,18 @@ impl Sleep for DefaultResetSleep {
 /// Infinite stream of items `0, 1, 2, ...` with alternating delays.
 ///
 /// The first item is ready immediately. The delay before odd items is
-/// `first_delay` and the delay before even items is `second_delay`.
+/// `odd_item_delay` and the delay before even items is `even_item_delay`.
 #[expect(clippy::cast_possible_truncation)]
 pub(super) fn alternating_delay_stream(
     started_at: Instant,
-    first_delay: Duration,
-    second_delay: Duration,
+    odd_item_delay: Duration,
+    even_item_delay: Duration,
 ) -> impl Stream<Item = usize> {
     stream::iter(0..).then(move |i| async move {
         sleep_until(
             started_at
-                + first_delay.saturating_mul((i + 1) as u32 / 2)
-                + second_delay.saturating_mul(i as u32 / 2),
+                + odd_item_delay.saturating_mul((i + 1) as u32 / 2)
+                + even_item_delay.saturating_mul(i as u32 / 2),
         )
         .await;
         i

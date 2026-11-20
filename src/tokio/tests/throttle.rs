@@ -18,25 +18,25 @@ use crate::{IntervalEdge, Sleep, StreamExt as _, ThrottleIntervalConfig, tokio::
 /// i.e. if the consumer is never late. Otherwise the fixed schedule of
 /// [`tokio::time::Sleep`] and the drifting schedule of [`DefaultResetSleep`]
 /// diverge.
-async fn run_alternating_delay_stream(
+async fn throttle_alternating_delay_stream(
     config: ThrottleIntervalConfig,
-    first_delay: Duration,
-    second_delay: Duration,
+    odd_item_delay: Duration,
+    even_item_delay: Duration,
     num_items: usize,
 ) -> Vec<(u128, usize)> {
-    let collected = run_alternating_delay_stream_with_sleep::<tokio::time::Sleep>(
+    let collected = throttle_alternating_delay_stream_with_sleep::<tokio::time::Sleep>(
         config,
-        first_delay,
-        second_delay,
+        odd_item_delay,
+        even_item_delay,
         num_items,
     )
     .await;
     assert_eq!(
         collected,
-        run_alternating_delay_stream_with_sleep::<DefaultResetSleep>(
+        throttle_alternating_delay_stream_with_sleep::<DefaultResetSleep>(
             config,
-            first_delay,
-            second_delay,
+            odd_item_delay,
+            even_item_delay,
             num_items,
         )
         .await
@@ -44,14 +44,14 @@ async fn run_alternating_delay_stream(
     collected
 }
 
-async fn run_alternating_delay_stream_with_sleep<S: Sleep>(
+async fn throttle_alternating_delay_stream_with_sleep<S: Sleep>(
     config: ThrottleIntervalConfig,
-    first_delay: Duration,
-    second_delay: Duration,
+    odd_item_delay: Duration,
+    even_item_delay: Duration,
     num_items: usize,
 ) -> Vec<(u128, usize)> {
     let started_at = Instant::now();
-    let throttled = alternating_delay_stream(started_at, first_delay, second_delay)
+    let throttled = alternating_delay_stream(started_at, odd_item_delay, even_item_delay)
         .throttle_interval_with_sleep::<S>(config, NonZeroUsize::MIN)
         .take(num_items);
     collect_with_millis(started_at, throttled).await
@@ -59,8 +59,8 @@ async fn run_alternating_delay_stream_with_sleep<S: Sleep>(
 
 #[tokio::test(start_paused = true)]
 async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_period() {
-    let first_delay = Duration::ZERO;
-    let second_delay = Duration::ZERO;
+    let odd_item_delay = Duration::ZERO;
+    let even_item_delay = Duration::ZERO;
     let period = Duration::ZERO;
     let expected_items = [
         (0, 0),
@@ -76,17 +76,21 @@ async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_
     ];
     for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
         let config = ThrottleIntervalConfig { period, edge };
-        let collected_items =
-            run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
-                .await;
+        let collected_items = throttle_alternating_delay_stream(
+            config,
+            odd_item_delay,
+            even_item_delay,
+            expected_items.len(),
+        )
+        .await;
         assert_eq!(expected_items, collected_items.as_slice());
     }
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_arrival_rate() {
-    let first_delay = TIME_TICK.saturating_mul(10);
-    let second_delay = TIME_TICK.saturating_mul(20);
+    let odd_item_delay = TIME_TICK.saturating_mul(10);
+    let even_item_delay = TIME_TICK.saturating_mul(20);
     let period = TIME_TICK.saturating_mul(9);
     let expected_leading = [
         (0, 0),
@@ -117,9 +121,13 @@ async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_
         (IntervalEdge::Trailing, expected_trailing.as_slice()),
     ] {
         let config = ThrottleIntervalConfig { period, edge };
-        let collected_items =
-            run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
-                .await;
+        let collected_items = throttle_alternating_delay_stream(
+            config,
+            odd_item_delay,
+            even_item_delay,
+            expected_items.len(),
+        )
+        .await;
         assert_eq!(expected_items, collected_items.as_slice());
     }
 }
@@ -128,8 +136,8 @@ async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_
 async fn leading_edge_sequence() {
     // ms:   0 | 20 | 30 | 50 | 60 | 80 | 90 | 110 | 120 | 140 | 150 | 170 | 180 | 200 | 210 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 | ...
-    let first_delay = TIME_TICK.saturating_mul(20);
-    let second_delay = TIME_TICK.saturating_mul(10);
+    let odd_item_delay = TIME_TICK.saturating_mul(20);
+    let even_item_delay = TIME_TICK.saturating_mul(10);
     let config = ThrottleIntervalConfig {
         period: TIME_TICK.saturating_mul(19),
         edge: IntervalEdge::Leading,
@@ -150,8 +158,13 @@ async fn leading_edge_sequence() {
         (191, 12),
         (210, 14),
     ];
-    let collected_items =
-        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
+    let collected_items = throttle_alternating_delay_stream(
+        config,
+        odd_item_delay,
+        even_item_delay,
+        expected_items.len(),
+    )
+    .await;
     assert_eq!(expected_items, collected_items.as_slice());
 }
 
@@ -159,8 +172,8 @@ async fn leading_edge_sequence() {
 async fn trailing_edge_sequence() {
     // ms:   0 | 10 | 30 | 40 | 60 | 70 | 90 | 100 | 120 | 130 | 150 | 160 | 180 | 190 | 210 | 220 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 |  15 | ...
-    let first_delay = TIME_TICK.saturating_mul(10);
-    let second_delay = TIME_TICK.saturating_mul(20);
+    let odd_item_delay = TIME_TICK.saturating_mul(10);
+    let even_item_delay = TIME_TICK.saturating_mul(20);
     let config = ThrottleIntervalConfig {
         period: TIME_TICK.saturating_mul(19),
         edge: IntervalEdge::Trailing,
@@ -180,8 +193,13 @@ async fn trailing_edge_sequence() {
         (190, 13),
         (229, 15),
     ];
-    let collected_items =
-        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
+    let collected_items = throttle_alternating_delay_stream(
+        config,
+        odd_item_delay,
+        even_item_delay,
+        expected_items.len(),
+    )
+    .await;
     assert_eq!(expected_items, collected_items.as_slice());
 }
 
@@ -189,15 +207,20 @@ async fn trailing_edge_sequence() {
 async fn trailing_edge_sequence_long_second_delay() {
     // ms:   0 | 10 | 110 | 120 | 220 | 230 | 330 | 340 | ...
     // item: 0 |  1 |   2 |   3 |   4 |   5 |   6 |   7 | ...
-    let first_delay = TIME_TICK.saturating_mul(10);
-    let second_delay = TIME_TICK.saturating_mul(100);
+    let odd_item_delay = TIME_TICK.saturating_mul(10);
+    let even_item_delay = TIME_TICK.saturating_mul(100);
     let config = ThrottleIntervalConfig {
         period: TIME_TICK.saturating_mul(19),
         edge: IntervalEdge::Trailing,
     };
     let expected_items = &[(19, 1), (129, 3), (239, 5), (349, 7)];
-    let collected_items =
-        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
+    let collected_items = throttle_alternating_delay_stream(
+        config,
+        odd_item_delay,
+        even_item_delay,
+        expected_items.len(),
+    )
+    .await;
     assert_eq!(expected_items, collected_items.as_slice());
 }
 
