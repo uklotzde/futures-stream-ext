@@ -3,7 +3,7 @@
 
 //! Extensions that depend on the Tokio runtime.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, pin::Pin, time::Duration};
 
 use futures_util::Stream;
 
@@ -21,6 +21,11 @@ pub type IntervalThrottler = crate::IntervalThrottler<tokio::time::Sleep>;
 impl crate::Sleep for tokio::time::Sleep {
     fn sleep(duration: Duration) -> Self {
         tokio::time::sleep(duration)
+    }
+
+    fn reset(self: Pin<&mut Self>, duration: Duration) {
+        // Reuses the registered timer.
+        tokio::time::Sleep::reset(self, tokio::time::Instant::now() + duration);
     }
 }
 

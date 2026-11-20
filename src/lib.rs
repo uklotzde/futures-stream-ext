@@ -4,7 +4,7 @@
 //! Extensions of the [`Stream`] trait and utilities for
 //! transforming or shaping streams.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, pin::Pin, time::Duration};
 
 use futures_util::{Stream, StreamExt as _};
 
@@ -35,6 +35,26 @@ pub enum IntervalEdge {
 pub trait Sleep: Future<Output = ()> + Sized {
     /// Suspends the task for the given duration.
     fn sleep(duration: Duration) -> Self;
+
+    /// Restarts the sleep to elapse after the given duration from now.
+    ///
+    /// Might be invoked both before and after the sleep has elapsed.
+    ///
+    /// The default implementation replaces `self` with a new sleep.
+    /// Override it if the sleep could be reset more efficiently,
+    /// e.g. by reusing an already registered timer.
+    fn reset(mut self: Pin<&mut Self>, duration: Duration) {
+        self.set(Self::sleep(duration));
+    }
+}
+
+/// Resets the sleep or creates a new one if none exists yet.
+fn reset_or_sleep<S: Sleep>(mut sleep: Pin<&mut Option<S>>, duration: Duration) {
+    if let Some(sleep) = sleep.as_mut().as_pin_mut() {
+        sleep.reset(duration);
+    } else {
+        sleep.set(Some(S::sleep(duration)));
+    }
 }
 
 /// Extension trait for [`Stream`].

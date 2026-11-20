@@ -11,7 +11,7 @@ use std::{
 use futures_util::stream::Stream;
 use pin_project_lite::pin_project;
 
-use crate::{IntervalEdge, Sleep};
+use crate::{IntervalEdge, Sleep, reset_or_sleep};
 
 /// Callbacks for throttling a stream
 pub trait Throttler<T>: Stream<Item = ()> {
@@ -178,9 +178,12 @@ pin_project! {
     #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<S> {
         config: ThrottleIntervalConfig,
-        // `None` if the current interval has already elapsed or if the period is zero.
+        // Created on demand and reused afterwards.
         #[pin]
         sleep: Option<S>,
+        // Wait for `sleep` before the next tick.
+        // Always `false` if the period is zero.
+        sleep_armed: bool,
         state: IntervalThrottlerState,
     }
 }
@@ -191,19 +194,25 @@ impl<S: Sleep> IntervalThrottler<S> {
         Self {
             config,
             sleep: None,
+            sleep_armed: false,
             state: IntervalThrottlerState::Idle,
         }
     }
 }
 
 /// Starts the next interval.
-fn restart_interval<S: Sleep>(mut sleep: Pin<&mut Option<S>>, period: Duration) {
+fn restart_interval<S: Sleep>(
+    sleep: Pin<&mut Option<S>>,
+    sleep_armed: &mut bool,
+    period: Duration,
+) {
     if period.is_zero() {
         // No throttling.
-        sleep.set(None);
+        *sleep_armed = false;
         return;
     }
-    sleep.set(Some(S::sleep(period)));
+    reset_or_sleep(sleep, period);
+    *sleep_armed = true;
 }
 
 impl<S: Sleep> Stream for IntervalThrottler<S> {
@@ -213,15 +222,20 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
         let IntervalThrottlerProjection {
             config,
             mut sleep,
+            sleep_armed,
             state,
         } = self.project();
         match state {
             IntervalThrottlerState::Idle => Poll::Pending,
             IntervalThrottlerState::Pending => {
-                if let Some(sleep) = sleep.as_mut().as_pin_mut() {
+                if *sleep_armed {
+                    let sleep = sleep
+                        .as_mut()
+                        .as_pin_mut()
+                        .expect("sleep must exist while armed");
                     ready!(sleep.poll(cx));
                 }
-                restart_interval(sleep, config.period);
+                restart_interval(sleep, sleep_armed, config.period);
                 Poll::Ready(Some(()))
             }
         }
@@ -232,7 +246,8 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
         let IntervalThrottlerProjection {
             config,
-            mut sleep,
+            sleep,
+            sleep_armed,
             state,
         } = self.project();
         if matches!(state, IntervalThrottlerState::Pending) {
@@ -240,8 +255,9 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
         }
         *state = IntervalThrottlerState::Pending;
         match config.edge {
-            IntervalEdge::Leading => sleep.set(None),
-            IntervalEdge::Trailing => restart_interval(sleep, config.period),
+            // The first tick is ready immediately.
+            IntervalEdge::Leading => *sleep_armed = false,
+            IntervalEdge::Trailing => restart_interval(sleep, sleep_armed, config.period),
         }
     }
 
