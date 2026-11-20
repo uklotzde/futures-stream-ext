@@ -39,21 +39,12 @@ async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_
         (0, 8),
         (0, 9),
     ];
-    for config in [
-        ThrottleIntervalConfig {
-            period,
-            edge: IntervalEdge::Leading,
-        },
-        ThrottleIntervalConfig {
-            period,
-            edge: IntervalEdge::Trailing,
-        },
-    ] {
-        assert_eq!(
-            &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
-                .await,
-            &expected_items
-        );
+    for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
+        let config = ThrottleIntervalConfig { period, edge };
+        let collected_items =
+            run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
+                .await;
+        assert_eq!(expected_items, collected_items.as_slice());
     }
 }
 
@@ -86,32 +77,16 @@ async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_
         (129, 8),
         (138, 9),
     ];
-    assert_eq!(
-        &run_alternating_delay_stream(
-            ThrottleIntervalConfig {
-                period,
-                edge: IntervalEdge::Leading,
-            },
-            first_delay,
-            second_delay,
-            expected_leading.len(),
-        )
-        .await,
-        &expected_leading
-    );
-    assert_eq!(
-        &run_alternating_delay_stream(
-            ThrottleIntervalConfig {
-                period,
-                edge: IntervalEdge::Trailing,
-            },
-            first_delay,
-            second_delay,
-            expected_trailing.len(),
-        )
-        .await,
-        &expected_trailing
-    );
+    for (edge, expected_items) in [
+        (IntervalEdge::Leading, expected_leading.as_slice()),
+        (IntervalEdge::Trailing, expected_trailing.as_slice()),
+    ] {
+        let config = ThrottleIntervalConfig { period, edge };
+        let collected_items =
+            run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
+                .await;
+        assert_eq!(expected_items, collected_items.as_slice());
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -186,43 +161,45 @@ async fn trailing_edge_sequence_long_second_delay() {
         edge: IntervalEdge::Trailing,
     };
     let expected_items = &[(19, 1), (129, 3), (239, 5), (349, 7)];
-    assert_eq!(
-        &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
-            .await,
-        &expected_items
-    );
+    let collected_items =
+        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
+    assert_eq!(expected_items, collected_items.as_slice());
+}
+
+/// Configs with zero and non-zero periods for both edges.
+fn finish_test_configs() -> impl Iterator<Item = ThrottleIntervalConfig> {
+    [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)]
+        .into_iter()
+        .flat_map(|period| {
+            [IntervalEdge::Leading, IntervalEdge::Trailing]
+                .map(|edge| ThrottleIntervalConfig { period, edge })
+        })
 }
 
 #[tokio::test]
 async fn should_finish_on_empty_input_stream() {
-    for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
-        for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
-            let config = ThrottleIntervalConfig { period, edge };
-            assert_eq!(
-                Vec::<()>::new(),
-                stream::empty::<()>()
-                    .throttle_interval(config, NonZeroUsize::MIN)
-                    .collect::<Vec<_>>()
-                    .await
-            );
-        }
+    for config in finish_test_configs() {
+        assert_eq!(
+            Vec::<()>::new(),
+            stream::empty::<()>()
+                .throttle_interval(config, NonZeroUsize::MIN)
+                .collect::<Vec<_>>()
+                .await
+        );
     }
 }
 
 #[tokio::test]
 async fn should_finish_after_non_empty_input_stream_has_completed() {
-    for period in [Duration::ZERO, TIME_TICK, TIME_TICK.saturating_mul(2)] {
-        for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
-            let config = ThrottleIntervalConfig { period, edge };
-            assert_eq!(
-                &[()],
-                stream::once(async {})
-                    .throttle_interval(config, NonZeroUsize::MIN)
-                    .collect::<Vec<_>>()
-                    .await
-                    .as_slice()
-            );
-        }
+    for config in finish_test_configs() {
+        assert_eq!(
+            &[()],
+            stream::once(async {})
+                .throttle_interval(config, NonZeroUsize::MIN)
+                .collect::<Vec<_>>()
+                .await
+                .as_slice()
+        );
     }
 }
 
