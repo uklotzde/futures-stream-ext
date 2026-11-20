@@ -13,7 +13,7 @@ keywords = ["async", "stream"]
 edition = "2024"
 # Keep in sync with `.github/workflows/audit-dependencies.yaml`.
 rust-version = "1.89"
-include = ["/src", "/README.md", "/LICENSES"]
+include = ["/src", "/CHANGELOG.md", "/README.md", "/LICENSES"]
 
 [dependencies]
 futures-util = { version = "0.3.31", default-features = false }
