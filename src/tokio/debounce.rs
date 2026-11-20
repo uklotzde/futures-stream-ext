@@ -9,7 +9,7 @@ use tokio::{
     time::{self, Instant, sleep_until},
 };
 
-use crate::StreamExt;
+use crate::tokio::StreamExt as _;
 
 const TIME_TICK: Duration = Duration::from_millis(1);
 

@@ -105,7 +105,7 @@ mod tests {
         time::{self, Instant, sleep_until},
     };
 
-    use crate::{IntervalEdge, StreamExt as _, ThrottleIntervalConfig};
+    use crate::{IntervalEdge, ThrottleIntervalConfig, tokio::StreamExt as _};
 
     const TIME_TICK: Duration = Duration::from_millis(1);
 

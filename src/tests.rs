@@ -1,0 +1,69 @@
+// SPDX-FileCopyrightText: The futures-stream-ext authors
+// SPDX-License-Identifier: MPL-2.0
+
+//! Runtime-agnostic tests that do not require any optional features.
+
+use std::{
+    num::NonZeroUsize,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+use futures_util::{Stream, StreamExt as _, stream};
+
+use crate::{Sleep, StreamExt as _, Throttler};
+
+/// A [`Sleep`] that is ready immediately.
+#[derive(Debug)]
+struct NoSleep;
+
+impl Future for NoSleep {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Poll::Ready(())
+    }
+}
+
+impl Sleep for NoSleep {
+    fn sleep(_duration: Duration) -> Self {
+        Self
+    }
+}
+
+/// A [`Throttler`] that is always ready.
+#[derive(Debug)]
+struct NoThrottle;
+
+impl Stream for NoThrottle {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Ready(Some(()))
+    }
+}
+
+impl<T> Throttler<T> for NoThrottle {
+    fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {}
+
+    fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, _next_item: Option<&T>) {}
+}
+
+#[tokio::test]
+async fn debounce_with_sleep_should_only_emit_last_of_ready_items() {
+    let actual_output = stream::iter([1, 2, 3])
+        .debounce_with_sleep::<NoSleep>(Duration::ZERO)
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(vec![3], actual_output);
+}
+
+#[tokio::test]
+async fn throttle_should_pass_through_all_items_if_always_ready() {
+    let actual_output = stream::iter([1, 2, 3])
+        .throttle(NoThrottle, NonZeroUsize::MIN)
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(vec![1, 2, 3], actual_output);
+}

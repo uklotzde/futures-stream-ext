@@ -38,20 +38,19 @@ pub trait Sleep: Future<Output = ()> + Sized {
 }
 
 /// Extension trait for [`Stream`].
+///
+/// Runtime-agnostic. Extensions that depend on the Tokio runtime are provided
+/// by `tokio::StreamExt` (requires the `tokio` feature).
 pub trait StreamExt: Stream {
-    /// Custom implementation of [`Sleep`].
-    type Sleep: Sleep;
-
-    /// Return type of [`throttle_interval()`](Self::throttle_interval).
-    type IntervalThrottler: Throttler<<Self as Stream>::Item>;
-
     /// Debounces an input stream.
     ///
     /// Delays items until no more new items have arrived during the delay window.
     ///
     /// Filters out items that arrive in quick succession. Only the last item from
     /// each sequence is emitted. All preceding items are discarded.
-    fn debounce(self, delay: Duration) -> Debounced<Self, Self::Sleep>
+    ///
+    /// The delay is implemented by the given [`Sleep`] type.
+    fn debounce_with_sleep<S: Sleep>(self, delay: Duration) -> Debounced<Self, S>
     where
         Self: Sized,
     {
@@ -82,18 +81,9 @@ pub trait StreamExt: Stream {
     {
         Throttled::new(self, throttler, poll_next_max_ready_count)
     }
-
-    /// Throttles an input stream by using a fixed interval.
-    ///
-    /// See also: [`throttle()`](Self::throttle)
-    fn throttle_interval(
-        self,
-        config: ThrottleIntervalConfig,
-        poll_next_max_ready_count: NonZeroUsize,
-    ) -> Throttled<Self, Self::IntervalThrottler>
-    where
-        Self: Sized;
 }
+
+impl<S: Stream> StreamExt for S {}
 
 fn filter_stateful_sync<S, T, F>(
     stream: S,
@@ -108,3 +98,6 @@ where
     stream
         .filter(move |next_item| std::future::ready(filter_update_state_fn(&mut state, next_item)))
 }
+
+#[cfg(test)]
+mod tests;
