@@ -7,7 +7,10 @@ use std::{
     time::Duration,
 };
 
-use futures_util::Stream;
+use futures_util::{
+    Stream, StreamExt as _,
+    stream::{Fuse, FusedStream as _},
+};
 use pin_project_lite::pin_project;
 
 use crate::Sleep;
@@ -48,11 +51,10 @@ impl<T, S: Sleep> Future for Delayed<T, S> {
 pin_project! {
     /// Result of [`StreamExt::debounce()`](crate::StreamExt::debounce).
     #[derive(Debug)]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
     #[project = DebouncedProjected]
     pub struct Debounced<St: Stream, S: Sleep> {
         #[pin]
-        stream: Option<St>,
+        stream: Fuse<St>,
 
         delay: Duration,
 
@@ -62,9 +64,9 @@ pin_project! {
 }
 
 impl<St: Stream, S: Sleep> Debounced<St, S> {
-    pub(crate) const fn new(stream: St, delay: Duration) -> Self {
+    pub(crate) fn new(stream: St, delay: Duration) -> Self {
         Self {
-            stream: Some(stream),
+            stream: stream.fuse(),
             delay,
             pending: None,
         }
@@ -85,31 +87,23 @@ where
             mut pending,
         } = self.project();
 
-        if let Some(mut poll_stream) = stream.as_mut().as_pin_mut() {
-            let mut last_item = None;
+        // Continue polling the stream while ready. The fused stream
+        // is never polled again after it has finished.
+        let mut last_item = None;
+        while let Poll::Ready(Some(next_item)) = stream.as_mut().poll_next(cx) {
+            last_item = Some(next_item);
+        }
 
-            while let Poll::Ready(next_item) = poll_stream.as_mut().poll_next(cx) {
-                if let Some(next_item) = next_item {
-                    last_item = Some(next_item);
-                    // Continue polling the stream while ready.
-                    continue;
-                }
-                // Stream has finished and must not be polled again.
-                stream.set(None);
-                break;
-            }
-
-            // Replace pending with delayed last item from the stream.
-            if let Some(last_item) = last_item {
-                let next_pending = Delayed::new(last_item, *delay);
-                // The currently pending future is canceled and dropped by overwriting it.
-                pending.set(Some(next_pending));
-            }
+        // Replace pending with delayed last item from the stream.
+        if let Some(last_item) = last_item {
+            let next_pending = Delayed::new(last_item, *delay);
+            // The currently pending future is canceled and dropped by overwriting it.
+            pending.set(Some(next_pending));
         }
 
         let Some(poll_pending) = pending.as_mut().as_pin_mut() else {
             // No pending item.
-            return if stream.is_none() {
+            return if stream.is_terminated() {
                 // Stream has finished.
                 Poll::Ready(None)
             } else {
