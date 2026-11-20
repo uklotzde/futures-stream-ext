@@ -54,7 +54,7 @@ pin_project! {
         #[pin]
         throttler: Th,
         poll_next_max_ready_count: NonZeroUsize,
-        pending: Option<St::Item>,
+        pending_item: Option<St::Item>,
         // Set until `throttle_pending` has been called and
         // again after `throttle_ready` has been called with `None`.
         throttler_idle: bool,
@@ -71,7 +71,7 @@ where
             stream: stream.fuse(),
             throttler,
             poll_next_max_ready_count,
-            pending: None,
+            pending_item: None,
             throttler_idle: true,
         }
     }
@@ -95,21 +95,21 @@ where
                 *this.throttler_idle = false;
                 this.throttler.as_mut().throttle_pending(cx);
             }
-            *this.pending = Some(latest_item);
+            *this.pending_item = Some(latest_item);
         }
 
         if this.stream.is_terminated() {
-            if this.pending.is_none() {
+            if this.pending_item.is_none() {
                 // Stream has finished.
                 return Poll::Ready(None);
             }
             // Yield the last pending item when the throttler is ready.
             ready!(this.throttler.as_mut().poll_next(cx));
-            return Poll::Ready(this.pending.take());
+            return Poll::Ready(this.pending_item.take());
         }
 
         if this.throttler.as_mut().poll_next(cx).is_ready() {
-            let next_item = this.pending.take();
+            let next_item = this.pending_item.take();
             this.throttler
                 .as_mut()
                 .throttle_ready(cx, next_item.as_ref());
