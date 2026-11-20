@@ -6,7 +6,7 @@
 
 use std::{num::NonZeroUsize, pin::Pin, time::Duration};
 
-use futures_util::{Stream, StreamExt as _};
+use futures_util::Stream;
 
 mod distinct;
 pub use self::distinct::{
@@ -142,20 +142,6 @@ pub trait StreamExt: Stream {
 }
 
 impl<S: Stream> StreamExt for S {}
-
-fn filter_stateful_sync<S, T, F>(
-    stream: S,
-    initial_state: T,
-    mut filter_update_state_fn: F,
-) -> impl Stream<Item = S::Item>
-where
-    S: Stream,
-    F: FnMut(&mut T, &S::Item) -> bool,
-{
-    let mut state = initial_state;
-    stream
-        .filter(move |next_item| std::future::ready(filter_update_state_fn(&mut state, next_item)))
-}
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,21 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt as _};
 
-use crate::filter_stateful_sync;
+fn filter_stateful_sync<S, T, F>(
+    stream: S,
+    initial_state: T,
+    mut filter_update_state_fn: F,
+) -> impl Stream<Item = S::Item>
+where
+    S: Stream,
+    F: FnMut(&mut T, &S::Item) -> bool,
+{
+    let mut state = initial_state;
+    stream
+        .filter(move |next_item| std::future::ready(filter_update_state_fn(&mut state, next_item)))
+}
 
 /// Filtering of subsequent/adjacent sequence items.
 ///
