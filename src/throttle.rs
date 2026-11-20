@@ -20,28 +20,28 @@ use crate::{IntervalEdge, Sleep, pending_and_wake_if, poll_latest_ready, reset_o
 pub trait Throttler<T>: Stream<Item = ()> {
     /// A new item has been received from the input stream while idle.
     ///
-    /// The throttler is idle initially and after `throttle_ready` has been
+    /// The throttler is idle initially and after `on_tick` has been
     /// called with `None`. This method is not called again until then.
     ///
-    /// After invocation of this method `throttle_ready` will be called
+    /// After invocation of this method `on_tick` will be called
     /// with `Some` when the current interval has elapsed. The current
-    /// item that will be yielded may still change until `throttle_ready`
+    /// item that will be yielded may still change until `on_tick`
     /// is called.
     ///
     /// The `cx` argument is only provided for consistency and can safely
     /// be ignored in most cases. The throttler will be polled immediately
     /// after this method returns.
-    fn throttle_pending(self: Pin<&mut Self>, cx: &mut Context<'_>);
+    fn on_first_item(self: Pin<&mut Self>, cx: &mut Context<'_>);
 
     /// The current interval has elapsed.
     ///
     /// Called after each tick before the throttler is polled again. The
-    /// throttler should start the next interval only if `next_item` is `Some`.
+    /// throttler should start the next interval only if `yielded_item` is `Some`.
     ///
-    /// Provides the pending item of the throttled input stream that is ready
-    /// or `None` if no item has been received from the input stream during
-    /// the last interval.
-    fn throttle_ready(self: Pin<&mut Self>, cx: &mut Context<'_>, next_item: Option<&T>);
+    /// Provides the pending item of the throttled input stream that is
+    /// about to be yielded or `None` if no item has been received from the
+    /// input stream during the last interval.
+    fn on_tick(self: Pin<&mut Self>, cx: &mut Context<'_>, yielded_item: Option<&T>);
 }
 
 pin_project! {
@@ -55,8 +55,8 @@ pin_project! {
         throttler: Th,
         poll_next_max_ready_count: NonZeroUsize,
         pending_item: Option<St::Item>,
-        // Set until `throttle_pending` has been called and
-        // again after `throttle_ready` has been called with `None`.
+        // Set until `on_first_item` has been called and
+        // again after `on_tick` has been called with `None`.
         throttler_idle: bool,
     }
 }
@@ -93,7 +93,7 @@ where
         if let Some(latest_item) = latest_item {
             if *this.throttler_idle {
                 *this.throttler_idle = false;
-                this.throttler.as_mut().throttle_pending(cx);
+                this.throttler.as_mut().on_first_item(cx);
             }
             *this.pending_item = Some(latest_item);
         }
@@ -109,14 +109,12 @@ where
         }
 
         if this.throttler.as_mut().poll_next(cx).is_ready() {
-            let next_item = this.pending_item.take();
-            this.throttler
-                .as_mut()
-                .throttle_ready(cx, next_item.as_ref());
-            if next_item.is_none() {
+            let yielded_item = this.pending_item.take();
+            this.throttler.as_mut().on_tick(cx, yielded_item.as_ref());
+            if yielded_item.is_none() {
                 *this.throttler_idle = true;
             } else {
-                return Poll::Ready(next_item);
+                return Poll::Ready(yielded_item);
             }
         }
         pending_and_wake_if(cx, stream_maybe_ready)
@@ -205,13 +203,13 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
                 ready!(sleep.poll(cx));
             }
         }
-        // The next interval is started by `throttle_ready()`.
+        // The next interval is started by `on_tick()`.
         Poll::Ready(Some(()))
     }
 }
 
 impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
-    fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
+    fn on_first_item(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
         let IntervalThrottlerProjection {
             config,
             sleep,
@@ -225,19 +223,19 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
         };
     }
 
-    fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
+    fn on_tick(self: Pin<&mut Self>, _cx: &mut Context<'_>, yielded_item: Option<&T>) {
         let IntervalThrottlerProjection {
             config,
             sleep,
             state,
         } = self.project();
-        if next_item.is_none() {
+        if yielded_item.is_none() {
             // Leave the elapsed sleep unarmed until items are pending again.
             *state = IntervalThrottlerState::Idle;
             return;
         }
         match state {
-            IntervalThrottlerState::Idle => panic!("throttle_ready called while idle"),
+            IntervalThrottlerState::Idle => panic!("on_tick called while idle"),
             IntervalThrottlerState::TickReady => *state = start_interval(sleep, config.period),
             IntervalThrottlerState::Sleeping => {
                 // Continue on a fixed schedule.
