@@ -15,9 +15,9 @@ use futures_util::{Stream, stream::Fuse};
 
 mod distinct;
 pub use self::distinct::{
-    DistinctState, DistinctUntilChanged, DistinctUntilChangedByKey, DistinctUntilChangedErrResult,
-    DistinctUntilChangedOkResult, filter_distinct_until_changed,
-    filter_distinct_until_changed_err_result, filter_distinct_until_changed_ok_result,
+    DistinctState, DistinctUntilChanged, DistinctUntilChangedByKey, DistinctUntilChangedErr,
+    DistinctUntilChangedOk, filter_distinct_until_changed, filter_distinct_until_changed_err,
+    filter_distinct_until_changed_ok,
 };
 
 mod debounce;
@@ -175,24 +175,24 @@ pub trait StreamExt: Stream {
 
     /// Filters out subsequent/adjacent `Ok` items in a result stream.
     ///
-    /// See also: [`filter_distinct_until_changed_ok_result()`]
-    fn distinct_until_changed_ok_result<T, E>(self) -> DistinctUntilChangedOkResult<Self, T>
+    /// See also: [`filter_distinct_until_changed_ok()`]
+    fn distinct_until_changed_ok<T, E>(self) -> DistinctUntilChangedOk<Self, T>
     where
         Self: Stream<Item = Result<T, E>> + Sized,
         T: Clone + PartialEq,
     {
-        DistinctUntilChangedOkResult::new(self)
+        DistinctUntilChangedOk::new(self)
     }
 
     /// Filters out subsequent/adjacent `Err` items in a result stream.
     ///
-    /// See also: [`filter_distinct_until_changed_err_result()`]
-    fn distinct_until_changed_err_result<T, E>(self) -> DistinctUntilChangedErrResult<Self, E>
+    /// See also: [`filter_distinct_until_changed_err()`]
+    fn distinct_until_changed_err<T, E>(self) -> DistinctUntilChangedErr<Self, E>
     where
         Self: Stream<Item = Result<T, E>> + Sized,
         E: Clone + PartialEq,
     {
-        DistinctUntilChangedErrResult::new(self)
+        DistinctUntilChangedErr::new(self)
     }
 
     /// Debounces an input stream.

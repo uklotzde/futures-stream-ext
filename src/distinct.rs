@@ -93,8 +93,8 @@ where
 
 /// State for filtering distinct values that are interrupted by other items.
 ///
-/// Used by [`filter_distinct_until_changed_ok_result()`] and
-/// [`filter_distinct_until_changed_err_result()`]. Keeps the last value
+/// Used by [`filter_distinct_until_changed_ok()`] and
+/// [`filter_distinct_until_changed_err()`]. Keeps the last value
 /// after an interruption to reuse its allocation.
 #[derive(Debug, Clone)]
 pub struct DistinctState<T> {
@@ -239,7 +239,7 @@ where
 /// All `Err` sequence items are passed through.
 ///
 /// See also: [`filter_distinct_until_changed()`]
-pub fn filter_distinct_until_changed_ok_result<T, E>(
+pub fn filter_distinct_until_changed_ok<T, E>(
     state: &mut DistinctState<T>,
     next_result: &Result<T, E>,
 ) -> bool
@@ -250,39 +250,39 @@ where
 }
 
 #[derive(Debug)]
-struct OkResultState<T>(DistinctState<T>);
+struct OkState<T>(DistinctState<T>);
 
-impl<T, E> FilterState<Result<T, E>> for OkResultState<T>
+impl<T, E> FilterState<Result<T, E>> for OkState<T>
 where
     T: Clone + PartialEq,
 {
     fn filter_next(&mut self, next_result: &Result<T, E>) -> bool {
-        filter_distinct_until_changed_ok_result(&mut self.0, next_result)
+        filter_distinct_until_changed_ok(&mut self.0, next_result)
     }
 }
 
 pin_project! {
-    /// Result of [`StreamExt::distinct_until_changed_ok_result()`](crate::StreamExt::distinct_until_changed_ok_result).
+    /// Result of [`StreamExt::distinct_until_changed_ok()`](crate::StreamExt::distinct_until_changed_ok).
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled or .awaited"]
-    pub struct DistinctUntilChangedOkResult<St, T> {
+    pub struct DistinctUntilChangedOk<St, T> {
         #[pin]
-        inner: FilterStatefulSync<St, OkResultState<T>>,
+        inner: FilterStatefulSync<St, OkState<T>>,
     }
 }
 
-impl<St, T> DistinctUntilChangedOkResult<St, T> {
+impl<St, T> DistinctUntilChangedOk<St, T> {
     pub(crate) const fn new(stream: St) -> Self {
         Self {
             inner: FilterStatefulSync {
                 stream,
-                state: OkResultState(DistinctState::new()),
+                state: OkState(DistinctState::new()),
             },
         }
     }
 }
 
-impl<St, T, E> Stream for DistinctUntilChangedOkResult<St, T>
+impl<St, T, E> Stream for DistinctUntilChangedOk<St, T>
 where
     St: Stream<Item = Result<T, E>>,
     T: Clone + PartialEq,
@@ -297,7 +297,7 @@ where
 /// All `Ok` sequence items are passed through.
 ///
 /// See also: [`filter_distinct_until_changed()`]
-pub fn filter_distinct_until_changed_err_result<T, E>(
+pub fn filter_distinct_until_changed_err<T, E>(
     state: &mut DistinctState<E>,
     next_result: &Result<T, E>,
 ) -> bool
@@ -308,39 +308,39 @@ where
 }
 
 #[derive(Debug)]
-struct ErrResultState<E>(DistinctState<E>);
+struct ErrState<E>(DistinctState<E>);
 
-impl<T, E> FilterState<Result<T, E>> for ErrResultState<E>
+impl<T, E> FilterState<Result<T, E>> for ErrState<E>
 where
     E: Clone + PartialEq,
 {
     fn filter_next(&mut self, next_result: &Result<T, E>) -> bool {
-        filter_distinct_until_changed_err_result(&mut self.0, next_result)
+        filter_distinct_until_changed_err(&mut self.0, next_result)
     }
 }
 
 pin_project! {
-    /// Result of [`StreamExt::distinct_until_changed_err_result()`](crate::StreamExt::distinct_until_changed_err_result).
+    /// Result of [`StreamExt::distinct_until_changed_err()`](crate::StreamExt::distinct_until_changed_err).
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled or .awaited"]
-    pub struct DistinctUntilChangedErrResult<St, E> {
+    pub struct DistinctUntilChangedErr<St, E> {
         #[pin]
-        inner: FilterStatefulSync<St, ErrResultState<E>>,
+        inner: FilterStatefulSync<St, ErrState<E>>,
     }
 }
 
-impl<St, E> DistinctUntilChangedErrResult<St, E> {
+impl<St, E> DistinctUntilChangedErr<St, E> {
     pub(crate) const fn new(stream: St) -> Self {
         Self {
             inner: FilterStatefulSync {
                 stream,
-                state: ErrResultState(DistinctState::new()),
+                state: ErrState(DistinctState::new()),
             },
         }
     }
 }
 
-impl<St, T, E> Stream for DistinctUntilChangedErrResult<St, E>
+impl<St, T, E> Stream for DistinctUntilChangedErr<St, E>
 where
     St: Stream<Item = Result<T, E>>,
     E: Clone + PartialEq,

@@ -38,10 +38,7 @@ async fn should_filter_out_adjacent_duplicate_ok_items() {
         Ok(3),
     ]);
     let expected_output = vec![Ok(1), Ok(2), Err(1), Ok(2), Err(2), Err(2), Ok(3)];
-    let actual_output = input
-        .distinct_until_changed_ok_result()
-        .collect::<Vec<_>>()
-        .await;
+    let actual_output = input.distinct_until_changed_ok().collect::<Vec<_>>().await;
     assert_eq!(expected_output, actual_output);
 }
 
@@ -59,9 +56,6 @@ async fn should_filter_out_adjacent_duplicate_err_items() {
         Err(3),
     ]);
     let expected_output = vec![Err(1), Err(2), Ok(1), Err(2), Ok(2), Ok(2), Err(3)];
-    let actual_output = input
-        .distinct_until_changed_err_result()
-        .collect::<Vec<_>>()
-        .await;
+    let actual_output = input.distinct_until_changed_err().collect::<Vec<_>>().await;
     assert_eq!(expected_output, actual_output);
 }
