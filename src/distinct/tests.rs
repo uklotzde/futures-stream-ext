@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use futures_util::StreamExt as _;
+use futures_util::{StreamExt as _, stream::FusedStream};
 
 use crate::StreamExt as _;
 
@@ -58,4 +58,22 @@ async fn should_filter_out_adjacent_duplicate_err_items() {
     let expected = vec![Err(1), Err(2), Ok(1), Err(2), Ok(2), Ok(2), Err(3)];
     let actual = input.distinct_until_changed_err().collect::<Vec<_>>().await;
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn should_be_terminated_after_a_fused_input_stream_has_finished() {
+    async fn assert_terminated_after_finished(mut stream: impl FusedStream + Unpin) {
+        assert!(!stream.is_terminated());
+        while stream.next().await.is_some() {}
+        assert!(stream.is_terminated());
+    }
+    let items = || futures_util::stream::iter([1, 1, 2]).fuse();
+    let results = || futures_util::stream::iter([Ok::<_, ()>(1), Err(()), Ok(1)]).fuse();
+    assert_terminated_after_finished(items().distinct_until_changed()).await;
+    assert_terminated_after_finished(
+        items().distinct_until_changed_by_key(None, |item| Some(*item)),
+    )
+    .await;
+    assert_terminated_after_finished(results().distinct_until_changed_ok()).await;
+    assert_terminated_after_finished(results().distinct_until_changed_err()).await;
 }

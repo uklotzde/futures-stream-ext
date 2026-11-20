@@ -6,7 +6,7 @@ use std::{
     task::{Context, Poll, ready},
 };
 
-use futures_util::Stream;
+use futures_util::{Stream, stream::FusedStream};
 use pin_project_lite::pin_project;
 
 /// Stateful predicate for filtering stream items synchronously.
@@ -48,6 +48,16 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         let (_, upper) = self.stream.size_hint();
         (0, upper)
+    }
+}
+
+impl<St, State> FusedStream for FilterStatefulSync<St, State>
+where
+    St: FusedStream,
+    State: FilterState<St::Item>,
+{
+    fn is_terminated(&self) -> bool {
+        self.stream.is_terminated()
     }
 }
 
@@ -178,6 +188,16 @@ where
     delegate_stream_to_inner!();
 }
 
+impl<St> FusedStream for DistinctUntilChanged<St>
+where
+    St: FusedStream,
+    St::Item: Clone + PartialEq,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
+}
+
 #[derive(Debug)]
 struct ByKeyState<K, F> {
     last_key: K,
@@ -230,6 +250,17 @@ where
     F: FnMut(&St::Item) -> K,
 {
     delegate_stream_to_inner!();
+}
+
+impl<St, K, F> FusedStream for DistinctUntilChangedByKey<St, K, F>
+where
+    St: FusedStream,
+    K: PartialEq,
+    F: FnMut(&St::Item) -> K,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
 }
 
 /// Filters out subsequent/adjacent `Ok` sequence items.
@@ -290,6 +321,16 @@ where
     delegate_stream_to_inner!();
 }
 
+impl<St, T, E> FusedStream for DistinctUntilChangedOk<St, T>
+where
+    St: FusedStream<Item = Result<T, E>>,
+    T: Clone + PartialEq,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
+}
+
 /// Filters out subsequent/adjacent `Err` sequence items.
 ///
 /// Each distinct `Err` sequence item will be cloned once.
@@ -346,6 +387,16 @@ where
     E: Clone + PartialEq,
 {
     delegate_stream_to_inner!();
+}
+
+impl<St, T, E> FusedStream for DistinctUntilChangedErr<St, E>
+where
+    St: FusedStream<Item = Result<T, E>>,
+    E: Clone + PartialEq,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
 }
 
 #[cfg(test)]
