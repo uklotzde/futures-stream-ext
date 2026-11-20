@@ -60,9 +60,35 @@ pub trait Sleep: Future<Output = ()> + Sized {
     ///
     /// The default implementation invokes [`reset()`](Self::reset) and
     /// starts the next period from now, i.e. the schedule may drift.
+    /// Implementations that know their deadline should override it
+    /// by using [`next_period_delay()`].
     fn reset_next_period(self: Pin<&mut Self>, period: Duration) {
         self.reset(period);
     }
+}
+
+/// Delay until the next deadline on a fixed schedule with missed periods skipped.
+///
+/// The `elapsed` argument is the time that has passed since the previous
+/// deadline.
+///
+/// Similar to `tokio::time::MissedTickBehavior::Skip`, but without
+/// any tolerance for slightly delayed ticks.
+///
+/// # Panics
+///
+/// Panics if `period` is zero.
+#[must_use]
+pub fn next_period_delay(elapsed: Duration, period: Duration) -> Duration {
+    assert!(!period.is_zero());
+    if elapsed < period {
+        return period.saturating_sub(elapsed);
+    }
+    // Skip missed periods and align with the schedule.
+    let behind_nanos = elapsed.as_nanos() % period.as_nanos();
+    let behind =
+        Duration::from_nanos(u64::try_from(behind_nanos).expect("remainder is less than period"));
+    period.saturating_sub(behind)
 }
 
 /// Resets the sleep or creates a new one if none exists yet.

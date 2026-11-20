@@ -12,7 +12,7 @@ use std::{
 
 use futures_util::{Stream, StreamExt as _, stream};
 
-use crate::{Sleep, StreamExt as _, Throttler};
+use crate::{Sleep, StreamExt as _, Throttler, next_period_delay};
 
 /// A [`Sleep`] that is ready immediately.
 #[derive(Debug)]
@@ -77,4 +77,27 @@ async fn throttle_should_pass_through_all_items_if_always_ready() {
         .collect::<Vec<_>>()
         .await;
     assert_eq!(vec![1, 2, 3], actual_output);
+}
+
+#[test]
+fn next_period_delay_on_schedule() {
+    let period = Duration::from_millis(10);
+    // Polled immediately or late, but within the next period.
+    for (elapsed_millis, expected_millis) in [(0, 10), (1, 9), (9, 1)] {
+        assert_eq!(
+            Duration::from_millis(expected_millis),
+            next_period_delay(Duration::from_millis(elapsed_millis), period)
+        );
+    }
+}
+
+#[test]
+fn next_period_delay_skips_missed_periods() {
+    let period = Duration::from_millis(10);
+    for (elapsed_millis, expected_millis) in [(10, 10), (15, 5), (25, 5), (30, 10)] {
+        assert_eq!(
+            Duration::from_millis(expected_millis),
+            next_period_delay(Duration::from_millis(elapsed_millis), period)
+        );
+    }
 }
