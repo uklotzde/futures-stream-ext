@@ -143,9 +143,9 @@ enum IntervalThrottlerState {
     /// No items are pending.
     Idle,
     /// Items are pending and the next tick is ready immediately.
-    TickNow,
+    TickReady,
     /// Items are pending and the next tick is ready when `sleep` has elapsed.
-    WaitForSleep,
+    Sleeping,
 }
 
 pin_project! {
@@ -176,17 +176,17 @@ impl<S: Sleep> IntervalThrottler<S> {
     }
 }
 
-/// Starts the next interval.
-fn restart_interval<S: Sleep>(
+/// Starts the first or the next interval.
+fn start_interval<S: Sleep>(
     sleep: Pin<&mut Option<S>>,
     period: Duration,
 ) -> IntervalThrottlerState {
     if period.is_zero() {
         // No throttling.
-        return IntervalThrottlerState::TickNow;
+        return IntervalThrottlerState::TickReady;
     }
     reset_or_sleep(sleep, period);
-    IntervalThrottlerState::WaitForSleep
+    IntervalThrottlerState::Sleeping
 }
 
 impl<S: Sleep> Stream for IntervalThrottler<S> {
@@ -197,8 +197,8 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
         match state {
             IntervalThrottlerState::Idle => return Poll::Pending,
             // The first tick or no throttling.
-            IntervalThrottlerState::TickNow => (),
-            IntervalThrottlerState::WaitForSleep => {
+            IntervalThrottlerState::TickReady => (),
+            IntervalThrottlerState::Sleeping => {
                 let sleep = sleep
                     .as_pin_mut()
                     .expect("sleep must exist while waiting for it");
@@ -220,8 +220,8 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
         debug_assert!(matches!(state, IntervalThrottlerState::Idle));
         *state = match config.edge {
             // The first tick is ready immediately.
-            IntervalEdge::Leading => IntervalThrottlerState::TickNow,
-            IntervalEdge::Trailing => restart_interval(sleep, config.period),
+            IntervalEdge::Leading => IntervalThrottlerState::TickReady,
+            IntervalEdge::Trailing => start_interval(sleep, config.period),
         };
     }
 
@@ -238,8 +238,8 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
         }
         match state {
             IntervalThrottlerState::Idle => panic!("throttle_ready called while idle"),
-            IntervalThrottlerState::TickNow => *state = restart_interval(sleep, config.period),
-            IntervalThrottlerState::WaitForSleep => {
+            IntervalThrottlerState::TickReady => *state = start_interval(sleep, config.period),
+            IntervalThrottlerState::Sleeping => {
                 // Continue on a fixed schedule.
                 sleep
                     .as_pin_mut()
