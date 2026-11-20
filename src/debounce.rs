@@ -14,7 +14,7 @@ use futures_util::{
 };
 use pin_project_lite::pin_project;
 
-use crate::{Sleep, reset_or_sleep};
+use crate::{Sleep, pending_and_wake_if, poll_latest_ready, reset_or_sleep};
 
 pin_project! {
     /// Result of [`StreamExt::debounce_with_sleep()`](crate::StreamExt::debounce_with_sleep).
@@ -69,25 +69,12 @@ where
             mut sleep,
         } = self.project();
 
-        // Continue polling the stream while ready, but at most
-        // `poll_next_max_ready_count` times in a row to prevent endless
-        // loops for streams that are always ready. The fused stream
-        // is never polled again after it has finished.
-        let mut last_item = None;
-        let mut ready_count = 0;
-        let mut stream_maybe_ready = false;
-        while let Poll::Ready(Some(next_item)) = stream.as_mut().poll_next(cx) {
-            last_item = Some(next_item);
-            ready_count += 1;
-            if ready_count >= poll_next_max_ready_count.get() {
-                stream_maybe_ready = true;
-                break;
-            }
-        }
+        let (latest_item, stream_maybe_ready) =
+            poll_latest_ready(stream.as_mut(), cx, *poll_next_max_ready_count);
 
         // Replace the pending item and restart the delay.
-        if let Some(last_item) = last_item {
-            *pending_item = Some(last_item);
+        if let Some(latest_item) = latest_item {
+            *pending_item = Some(latest_item);
             reset_or_sleep(sleep.as_mut(), *delay);
         }
 
@@ -107,12 +94,6 @@ where
         if sleep.poll(cx).is_ready() {
             return Poll::Ready(pending_item.take());
         }
-        if stream_maybe_ready {
-            // Wake ourselves up to ensure that polling the inner stream
-            // continues. Not needed when returning `Ready`, because the
-            // consumer will poll again anyway.
-            cx.waker().wake_by_ref();
-        }
-        Poll::Pending
+        pending_and_wake_if(cx, stream_maybe_ready)
     }
 }

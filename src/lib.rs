@@ -4,9 +4,14 @@
 //! Extensions of the [`Stream`] trait and utilities for
 //! transforming or shaping streams.
 
-use std::{num::NonZeroUsize, pin::Pin, time::Duration};
+use std::{
+    num::NonZeroUsize,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
-use futures_util::Stream;
+use futures_util::{Stream, stream::Fuse};
 
 mod distinct;
 pub use self::distinct::{
@@ -67,6 +72,42 @@ fn reset_or_sleep<S: Sleep>(mut sleep: Pin<&mut Option<S>>, duration: Duration) 
     } else {
         sleep.set(Some(S::sleep(duration)));
     }
+}
+
+/// Polls the latest ready item from the stream.
+///
+/// Continues polling the stream while ready, but at most `max_ready_count`
+/// times in a row to prevent endless loops for streams that are always ready.
+/// The fused stream is never polled again after it has finished.
+///
+/// Returns the last ready item, if any, and whether the stream might still
+/// be ready.
+fn poll_latest_ready<St: Stream>(
+    mut stream: Pin<&mut Fuse<St>>,
+    cx: &mut Context<'_>,
+    max_ready_count: NonZeroUsize,
+) -> (Option<St::Item>, bool) {
+    let mut latest_item = None;
+    let mut ready_count = 0;
+    while let Poll::Ready(Some(next_item)) = stream.as_mut().poll_next(cx) {
+        latest_item = Some(next_item);
+        ready_count += 1;
+        if ready_count >= max_ready_count.get() {
+            return (latest_item, true);
+        }
+    }
+    (latest_item, false)
+}
+
+/// Returns `Pending` and wakes the task if the stream might still be ready.
+///
+/// The self-wake ensures that polling the stream continues. It is not needed
+/// when returning `Ready`, because the consumer will poll again anyway.
+fn pending_and_wake_if<T>(cx: &mut Context<'_>, stream_maybe_ready: bool) -> Poll<T> {
+    if stream_maybe_ready {
+        cx.waker().wake_by_ref();
+    }
+    Poll::Pending
 }
 
 /// Extension trait for [`Stream`].
