@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use futures_util::Stream;
 use tokio::time::Sleep;
@@ -26,7 +26,7 @@ impl<S: Stream> StreamExt for S {
     fn throttle_interval(
         self,
         config: ThrottleIntervalConfig,
-        poll_next_max_ready_count: std::num::NonZeroUsize,
+        poll_next_max_ready_count: NonZeroUsize,
     ) -> Throttled<Self, Self::IntervalThrottler>
     where
         Self: Sized,

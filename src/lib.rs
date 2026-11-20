@@ -89,24 +89,10 @@ pub trait StreamExt: Stream {
     fn throttle_interval(
         self,
         config: ThrottleIntervalConfig,
-        poll_next_max_ready_count: std::num::NonZeroUsize,
+        poll_next_max_ready_count: NonZeroUsize,
     ) -> Throttled<Self, Self::IntervalThrottler>
     where
         Self: Sized;
-}
-
-fn filter_stateful<S, T, F, G>(
-    stream: S,
-    initial_state: T,
-    mut filter_update_state_fn: F,
-) -> impl Stream<Item = S::Item>
-where
-    S: Stream,
-    F: FnMut(&mut T, &S::Item) -> G,
-    G: Future<Output = bool>,
-{
-    let mut state = initial_state;
-    stream.filter(move |next_item| filter_update_state_fn(&mut state, next_item))
 }
 
 fn filter_stateful_sync<S, T, F>(
@@ -118,7 +104,7 @@ where
     S: Stream,
     F: FnMut(&mut T, &S::Item) -> bool,
 {
-    filter_stateful(stream, initial_state, move |state, next_item| {
-        std::future::ready(filter_update_state_fn(state, next_item))
-    })
+    let mut state = initial_state;
+    stream
+        .filter(move |next_item| std::future::ready(filter_update_state_fn(&mut state, next_item)))
 }
