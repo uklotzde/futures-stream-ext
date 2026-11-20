@@ -8,6 +8,7 @@ use tokio::time::Sleep;
 
 use crate::{StreamExt, ThrottleIntervalConfig, Throttled};
 
+#[cfg(test)]
 mod debounce;
 
 mod throttle;
