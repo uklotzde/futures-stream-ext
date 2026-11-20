@@ -60,7 +60,7 @@ async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_
     let odd_item_delay = Duration::ZERO;
     let even_item_delay = Duration::ZERO;
     let period = Duration::ZERO;
-    let expected_items = [
+    let expected = [
         (0, 0),
         (0, 1),
         (0, 2),
@@ -74,14 +74,14 @@ async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_
     ];
     for edge in [IntervalEdge::Leading, IntervalEdge::Trailing] {
         let config = IntervalThrottlerConfig { period, edge };
-        let collected_items = throttle_alternating_delay_stream(
+        let actual = throttle_alternating_delay_stream(
             config,
             odd_item_delay,
             even_item_delay,
-            expected_items.len(),
+            expected.len(),
         )
         .await;
-        assert_eq!(expected_items, collected_items.as_slice());
+        assert_eq!(expected, actual.as_slice());
     }
 }
 
@@ -114,19 +114,19 @@ async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_
         (129, 8),
         (138, 9),
     ];
-    for (edge, expected_items) in [
+    for (edge, expected) in [
         (IntervalEdge::Leading, expected_leading.as_slice()),
         (IntervalEdge::Trailing, expected_trailing.as_slice()),
     ] {
         let config = IntervalThrottlerConfig { period, edge };
-        let collected_items = throttle_alternating_delay_stream(
+        let actual = throttle_alternating_delay_stream(
             config,
             odd_item_delay,
             even_item_delay,
-            expected_items.len(),
+            expected.len(),
         )
         .await;
-        assert_eq!(expected_items, collected_items.as_slice());
+        assert_eq!(expected, actual.as_slice());
     }
 }
 
@@ -142,7 +142,7 @@ async fn should_throttle_on_the_leading_edge() {
     };
     // ms:   0 | 19 | 20 | 39 | 58 | 77 | 96 | 115 | 134 | 153 | 172 | 191 | 210 | ...
     // item: 0 |  - |  1 |  2 |  3 |  4 |  6 |   7 |   8 |  10 |  11 |  12 |  14 | ...
-    let expected_items = &[
+    let expected = &[
         (0, 0),
         (20, 1),
         (39, 2),
@@ -156,14 +156,10 @@ async fn should_throttle_on_the_leading_edge() {
         (191, 12),
         (210, 14),
     ];
-    let collected_items = throttle_alternating_delay_stream(
-        config,
-        odd_item_delay,
-        even_item_delay,
-        expected_items.len(),
-    )
-    .await;
-    assert_eq!(expected_items, collected_items.as_slice());
+    let actual =
+        throttle_alternating_delay_stream(config, odd_item_delay, even_item_delay, expected.len())
+            .await;
+    assert_eq!(expected, actual.as_slice());
 }
 
 #[tokio::test(start_paused = true)]
@@ -178,7 +174,7 @@ async fn should_throttle_on_the_trailing_edge() {
     };
     // ms:   0 | 19 | 38 | 57 | 76 | 95 | 114 | 133 | 152 | 171 | 190 | 209 | 210 | 229 | ...
     // item: * |  1 |  2 |  3 |  5 |  6 |   7 |   9 |  10 |  11 |  13 |   - |   * |  15 | ...
-    let expected_items = &[
+    let expected = &[
         (19, 1),
         (38, 2),
         (57, 3),
@@ -191,14 +187,10 @@ async fn should_throttle_on_the_trailing_edge() {
         (190, 13),
         (229, 15),
     ];
-    let collected_items = throttle_alternating_delay_stream(
-        config,
-        odd_item_delay,
-        even_item_delay,
-        expected_items.len(),
-    )
-    .await;
-    assert_eq!(expected_items, collected_items.as_slice());
+    let actual =
+        throttle_alternating_delay_stream(config, odd_item_delay, even_item_delay, expected.len())
+            .await;
+    assert_eq!(expected, actual.as_slice());
 }
 
 #[tokio::test(start_paused = true)]
@@ -211,15 +203,11 @@ async fn should_throttle_on_the_trailing_edge_with_long_pauses() {
         period: ms(19),
         edge: IntervalEdge::Trailing,
     };
-    let expected_items = &[(19, 1), (129, 3), (239, 5), (349, 7)];
-    let collected_items = throttle_alternating_delay_stream(
-        config,
-        odd_item_delay,
-        even_item_delay,
-        expected_items.len(),
-    )
-    .await;
-    assert_eq!(expected_items, collected_items.as_slice());
+    let expected = &[(19, 1), (129, 3), (239, 5), (349, 7)];
+    let actual =
+        throttle_alternating_delay_stream(config, odd_item_delay, even_item_delay, expected.len())
+            .await;
+    assert_eq!(expected, actual.as_slice());
 }
 
 /// Configs with zero and non-zero periods for both edges.
@@ -289,13 +277,13 @@ async fn drain_always_ready_input_stream_with_sleep<S: Sleep>() -> Vec<(u128, us
 async fn should_drain_an_always_ready_input_stream_between_ticks() {
     // All items are ready immediately and only the last one is yielded
     // after the first interval has elapsed.
-    let expected_items = vec![(10, 4)];
+    let expected = vec![(10, 4)];
     assert_eq!(
-        expected_items,
+        expected,
         drain_always_ready_input_stream_with_sleep::<tokio::time::Sleep>().await
     );
     assert_eq!(
-        expected_items,
+        expected,
         drain_always_ready_input_stream_with_sleep::<DefaultResetSleep>().await
     );
 }

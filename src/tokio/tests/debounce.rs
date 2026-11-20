@@ -112,52 +112,52 @@ async fn debounce_schedule_with_sleep<S: Sleep>(
 
 #[tokio::test(start_paused = true)]
 async fn should_finish_on_empty_input_stream() {
-    let collected = debounce_schedule(ms(10), []).await;
-    assert_eq!(Vec::<(u128, usize)>::new(), collected);
+    let actual = debounce_schedule(ms(10), []).await;
+    assert_eq!(Vec::<(u128, usize)>::new(), actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_single_item_after_delay() {
-    let collected = debounce_schedule(ms(10), [(5, 0)]).await;
-    assert_eq!(vec![(15, 0)], collected);
+    let actual = debounce_schedule(ms(10), [(5, 0)]).await;
+    assert_eq!(vec![(15, 0)], actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_only_emit_the_last_item_of_a_burst() {
     // All items arrive within the delay window of their predecessor.
     // The delay restarts with each item.
-    let collected = debounce_schedule(ms(10), [(0, 0), (5, 1), (10, 2), (19, 3)]).await;
-    assert_eq!(vec![(29, 3)], collected);
+    let actual = debounce_schedule(ms(10), [(0, 0), (5, 1), (10, 2), (19, 3)]).await;
+    assert_eq!(vec![(29, 3)], actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_only_emit_the_last_item_of_each_burst() {
-    let collected = debounce_schedule(
+    let actual = debounce_schedule(
         ms(10),
         [(0, 0), (5, 1), (30, 2), (35, 3), (39, 4), (100, 5)],
     )
     .await;
-    assert_eq!(vec![(15, 1), (49, 4), (110, 5)], collected);
+    assert_eq!(vec![(15, 1), (49, 4), (110, 5)], actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_all_items_that_arrive_slower_than_the_delay() {
-    let collected = debounce_schedule(ms(10), [(0, 0), (11, 1), (30, 2)]).await;
-    assert_eq!(vec![(10, 0), (21, 1), (40, 2)], collected);
+    let actual = debounce_schedule(ms(10), [(0, 0), (11, 1), (30, 2)]).await;
+    assert_eq!(vec![(10, 0), (21, 1), (40, 2)], actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_discard_items_that_are_ready_at_the_same_time() {
-    let collected = debounce_schedule(ms(10), [(0, 0), (0, 1), (0, 2), (20, 3), (20, 4)]).await;
-    assert_eq!(vec![(10, 2), (30, 4)], collected);
+    let actual = debounce_schedule(ms(10), [(0, 0), (0, 1), (0, 2), (20, 3), (20, 4)]).await;
+    assert_eq!(vec![(10, 2), (30, 4)], actual);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_the_pending_item_after_the_input_stream_has_finished() {
     // The input stream finishes immediately after the last item
     // while it is still pending.
-    let collected = debounce_schedule(ms(10), [(0, 0), (3, 1)]).await;
-    assert_eq!(vec![(13, 1)], collected);
+    let actual = debounce_schedule(ms(10), [(0, 0), (3, 1)]).await;
+    assert_eq!(vec![(13, 1)], actual);
 }
 
 #[tokio::test(start_paused = true)]
