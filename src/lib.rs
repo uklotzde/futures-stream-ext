@@ -4,6 +4,8 @@
 //! Extensions of the [`Stream`] trait and utilities for
 //! transforming or shaping streams.
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use std::{
     num::NonZeroUsize,
     pin::Pin,
