@@ -86,9 +86,23 @@ pub fn filter_distinct_until_changed<T>(last_item: &mut Option<T>, next_item: &T
 where
     T: Clone + PartialEq,
 {
+    filter_distinct_until_changed_by(last_item, next_item, |last_item, next_item| {
+        last_item == next_item
+    })
+}
+
+/// Like [`filter_distinct_until_changed()`], but compares items with `eq_fn`.
+fn filter_distinct_until_changed_by<T>(
+    last_item: &mut Option<T>,
+    next_item: &T,
+    eq_fn: impl FnOnce(&T, &T) -> bool,
+) -> bool
+where
+    T: Clone,
+{
     match last_item {
         // Discard the next item.
-        Some(last_item) if last_item == next_item => false,
+        Some(last_item) if eq_fn(last_item, next_item) => false,
         Some(last_item) => {
             // Reuse the existing allocation.
             last_item.clone_from(next_item);
@@ -192,6 +206,66 @@ impl<St> FusedStream for DistinctUntilChanged<St>
 where
     St: FusedStream,
     St::Item: Clone + PartialEq,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
+}
+
+#[derive(Debug)]
+struct ByState<T, F> {
+    last_item: Option<T>,
+    eq_fn: F,
+}
+
+impl<T, F> FilterState<T> for ByState<T, F>
+where
+    T: Clone,
+    F: FnMut(&T, &T) -> bool,
+{
+    fn filter_next(&mut self, next_item: &T) -> bool {
+        filter_distinct_until_changed_by(&mut self.last_item, next_item, &mut self.eq_fn)
+    }
+}
+
+pin_project! {
+    /// Result of [`StreamExt::distinct_until_changed_by()`](crate::StreamExt::distinct_until_changed_by).
+    #[derive(Debug)]
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    pub struct DistinctUntilChangedBy<St: Stream, F> {
+        #[pin]
+        inner: FilterStatefulSync<St, ByState<St::Item, F>>,
+    }
+}
+
+impl<St: Stream, F> DistinctUntilChangedBy<St, F> {
+    pub(crate) const fn new(stream: St, eq_fn: F) -> Self {
+        Self {
+            inner: FilterStatefulSync {
+                stream,
+                state: ByState {
+                    last_item: None,
+                    eq_fn,
+                },
+            },
+        }
+    }
+}
+
+impl<St, F> Stream for DistinctUntilChangedBy<St, F>
+where
+    St: Stream,
+    St::Item: Clone,
+    F: FnMut(&St::Item, &St::Item) -> bool,
+{
+    delegate_stream_to_inner!();
+}
+
+impl<St, F> FusedStream for DistinctUntilChangedBy<St, F>
+where
+    St: FusedStream,
+    St::Item: Clone,
+    F: FnMut(&St::Item, &St::Item) -> bool,
 {
     fn is_terminated(&self) -> bool {
         self.inner.is_terminated()

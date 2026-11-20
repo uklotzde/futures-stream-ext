@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `StreamExt::distinct_until_changed_by()` and the stream type `DistinctUntilChangedBy` filter out adjacent items that are equal according to a comparison function.
+
 ## [0.6.0] - 2026-11-20
 
 This release contains many breaking changes.

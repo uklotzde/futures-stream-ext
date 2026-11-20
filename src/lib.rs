@@ -15,9 +15,9 @@ use futures_util::{Stream, stream::Fuse};
 
 mod distinct;
 pub use self::distinct::{
-    DistinctState, DistinctUntilChanged, DistinctUntilChangedByKey, DistinctUntilChangedErr,
-    DistinctUntilChangedOk, filter_distinct_until_changed, filter_distinct_until_changed_err,
-    filter_distinct_until_changed_ok,
+    DistinctState, DistinctUntilChanged, DistinctUntilChangedBy, DistinctUntilChangedByKey,
+    DistinctUntilChangedErr, DistinctUntilChangedOk, filter_distinct_until_changed,
+    filter_distinct_until_changed_err, filter_distinct_until_changed_ok,
 };
 
 mod debounce;
@@ -150,6 +150,23 @@ pub trait StreamExt: Stream {
         Self::Item: Clone + PartialEq,
     {
         DistinctUntilChanged::new(self)
+    }
+
+    /// Filters out subsequent/adjacent stream items that are equal according to `eq_fn`.
+    ///
+    /// `eq_fn` is invoked with the last passed through item and the next item.
+    /// The next item is discarded if `eq_fn` returns `true`.
+    /// Each passed through item is cloned once and stored until it is replaced
+    /// by the next item that is not equal.
+    ///
+    /// See also: [`distinct_until_changed()`](Self::distinct_until_changed)
+    fn distinct_until_changed_by<F>(self, eq_fn: F) -> DistinctUntilChangedBy<Self, F>
+    where
+        Self: Sized,
+        Self::Item: Clone,
+        F: FnMut(&Self::Item, &Self::Item) -> bool,
+    {
+        DistinctUntilChangedBy::new(self, eq_fn)
     }
 
     /// Filters out subsequent/adjacent stream items with the same key.
