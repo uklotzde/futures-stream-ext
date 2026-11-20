@@ -9,31 +9,36 @@ use std::{
 use futures_util::Stream;
 use pin_project_lite::pin_project;
 
+/// Stateful predicate for filtering stream items synchronously.
+trait FilterState<T> {
+    /// Updates the state and returns `true` if `next_item` should be passed through.
+    fn filter_next(&mut self, next_item: &T) -> bool;
+}
+
 pin_project! {
     /// Filters stream items synchronously with a stateful predicate.
     ///
     /// Unlike [`StreamExt::filter()`](futures_util::StreamExt::filter) it
     /// neither buffers the item nor creates a future for each item.
-    #[must_use = "streams do nothing unless polled or .awaited"]
-    struct FilterStatefulSync<St, State, F> {
+    #[derive(Debug)]
+    struct FilterStatefulSync<St, State> {
         #[pin]
         stream: St,
         state: State,
-        filter_update_state_fn: F,
     }
 }
 
-impl<St, State, F> Stream for FilterStatefulSync<St, State, F>
+impl<St, State> Stream for FilterStatefulSync<St, State>
 where
     St: Stream,
-    F: FnMut(&mut State, &St::Item) -> bool,
+    State: FilterState<St::Item>,
 {
     type Item = St::Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
         while let Some(next_item) = ready!(this.stream.as_mut().poll_next(cx)) {
-            if (this.filter_update_state_fn)(this.state, &next_item) {
+            if this.state.filter_next(&next_item) {
                 return Poll::Ready(Some(next_item));
             }
         }
@@ -46,20 +51,19 @@ where
     }
 }
 
-const fn filter_stateful_sync<St, State, F>(
-    stream: St,
-    initial_state: State,
-    filter_update_state_fn: F,
-) -> impl Stream<Item = St::Item>
-where
-    St: Stream,
-    F: FnMut(&mut State, &St::Item) -> bool,
-{
-    FilterStatefulSync {
-        stream,
-        state: initial_state,
-        filter_update_state_fn,
-    }
+/// Implements [`Stream`] for a public wrapper of [`FilterStatefulSync`].
+macro_rules! delegate_stream_to_inner {
+    () => {
+        type Item = St::Item;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            self.project().inner.poll_next(cx)
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.inner.size_hint()
+        }
+    };
 }
 
 /// Filtering of subsequent/adjacent sequence items.
@@ -139,43 +143,93 @@ where
     true
 }
 
-/// Filters out subsequent/adjacent stream items.
-///
-/// See also: [`filter_distinct_until_changed()`].
-pub fn distinct_until_changed<St>(stream: St) -> impl Stream<Item = St::Item>
+impl<T: Clone + PartialEq> FilterState<T> for Option<T> {
+    fn filter_next(&mut self, next_item: &T) -> bool {
+        filter_distinct_until_changed(self, next_item)
+    }
+}
+
+pin_project! {
+    /// Result of [`StreamExt::distinct_until_changed()`](crate::StreamExt::distinct_until_changed).
+    #[derive(Debug)]
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    pub struct DistinctUntilChanged<St: Stream> {
+        #[pin]
+        inner: FilterStatefulSync<St, Option<St::Item>>,
+    }
+}
+
+impl<St: Stream> DistinctUntilChanged<St> {
+    pub(crate) const fn new(stream: St) -> Self {
+        Self {
+            inner: FilterStatefulSync {
+                stream,
+                state: None,
+            },
+        }
+    }
+}
+
+impl<St> Stream for DistinctUntilChanged<St>
 where
     St: Stream,
     St::Item: Clone + PartialEq,
 {
-    filter_stateful_sync(stream, None, filter_distinct_until_changed)
+    delegate_stream_to_inner!();
 }
 
-/// Filters out subsequent/adjacent stream items with the same key.
-///
-/// Compares the keys of stream items that are extracted by `key_fn`.
-/// The key of each stream item is extracted once and the items are
-/// passed through unmodified.
-/// The last key is stored until a different key occurs.
-///
-/// See also: [`distinct_until_changed()`]
-pub fn distinct_until_changed_by_key<St, K, F>(
-    stream: St,
-    initial_key: K,
-    mut key_fn: F,
-) -> impl Stream<Item = St::Item>
+#[derive(Debug)]
+struct ByKeyState<K, F> {
+    last_key: K,
+    key_fn: F,
+}
+
+impl<T, K, F> FilterState<T> for ByKeyState<K, F>
 where
-    St: Stream,
-    F: FnMut(&St::Item) -> K,
     K: PartialEq,
+    F: FnMut(&T) -> K,
 {
-    filter_stateful_sync(stream, initial_key, move |last_key, next_item| {
-        let next_key = key_fn(next_item);
-        if *last_key == next_key {
+    fn filter_next(&mut self, next_item: &T) -> bool {
+        let next_key = (self.key_fn)(next_item);
+        if self.last_key == next_key {
             return false;
         }
-        *last_key = next_key;
+        self.last_key = next_key;
         true
-    })
+    }
+}
+
+pin_project! {
+    /// Result of [`StreamExt::distinct_until_changed_by_key()`](crate::StreamExt::distinct_until_changed_by_key).
+    #[derive(Debug)]
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    pub struct DistinctUntilChangedByKey<St, K, F> {
+        #[pin]
+        inner: FilterStatefulSync<St, ByKeyState<K, F>>,
+    }
+}
+
+impl<St, K, F> DistinctUntilChangedByKey<St, K, F> {
+    pub(crate) const fn new(stream: St, initial_key: K, key_fn: F) -> Self {
+        Self {
+            inner: FilterStatefulSync {
+                stream,
+                state: ByKeyState {
+                    last_key: initial_key,
+                    key_fn,
+                },
+            },
+        }
+    }
+}
+
+impl<St, K, F> Stream for DistinctUntilChangedByKey<St, K, F>
+where
+    St: Stream,
+    K: PartialEq,
+    F: FnMut(&St::Item) -> K,
+{
+    delegate_stream_to_inner!();
 }
 
 /// Filters out subsequent/adjacent `Ok` sequence items.
@@ -195,19 +249,45 @@ where
     filter_distinct_until_changed_some(state, next_result.as_ref().ok())
 }
 
-/// Filters out subsequent/adjacent `Ok` items in a result stream.
-///
-/// See also: [`filter_distinct_until_changed_ok_result()`]
-pub fn distinct_until_changed_ok_result<St, T, E>(stream: St) -> impl Stream<Item = St::Item>
+#[derive(Debug)]
+struct OkResultState<T>(DistinctState<T>);
+
+impl<T, E> FilterState<Result<T, E>> for OkResultState<T>
+where
+    T: Clone + PartialEq,
+{
+    fn filter_next(&mut self, next_result: &Result<T, E>) -> bool {
+        filter_distinct_until_changed_ok_result(&mut self.0, next_result)
+    }
+}
+
+pin_project! {
+    /// Result of [`StreamExt::distinct_until_changed_ok_result()`](crate::StreamExt::distinct_until_changed_ok_result).
+    #[derive(Debug)]
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    pub struct DistinctUntilChangedOkResult<St, T> {
+        #[pin]
+        inner: FilterStatefulSync<St, OkResultState<T>>,
+    }
+}
+
+impl<St, T> DistinctUntilChangedOkResult<St, T> {
+    pub(crate) const fn new(stream: St) -> Self {
+        Self {
+            inner: FilterStatefulSync {
+                stream,
+                state: OkResultState(DistinctState::new()),
+            },
+        }
+    }
+}
+
+impl<St, T, E> Stream for DistinctUntilChangedOkResult<St, T>
 where
     St: Stream<Item = Result<T, E>>,
     T: Clone + PartialEq,
 {
-    filter_stateful_sync(
-        stream,
-        DistinctState::new(),
-        filter_distinct_until_changed_ok_result,
-    )
+    delegate_stream_to_inner!();
 }
 
 /// Filters out subsequent/adjacent `Err` sequence items.
@@ -227,19 +307,45 @@ where
     filter_distinct_until_changed_some(state, next_result.as_ref().err())
 }
 
-/// Filters out subsequent/adjacent `Err` items in a result stream.
-///
-/// See also: [`filter_distinct_until_changed_err_result()`]
-pub fn distinct_until_changed_err_result<St, T, E>(stream: St) -> impl Stream<Item = St::Item>
+#[derive(Debug)]
+struct ErrResultState<E>(DistinctState<E>);
+
+impl<T, E> FilterState<Result<T, E>> for ErrResultState<E>
+where
+    E: Clone + PartialEq,
+{
+    fn filter_next(&mut self, next_result: &Result<T, E>) -> bool {
+        filter_distinct_until_changed_err_result(&mut self.0, next_result)
+    }
+}
+
+pin_project! {
+    /// Result of [`StreamExt::distinct_until_changed_err_result()`](crate::StreamExt::distinct_until_changed_err_result).
+    #[derive(Debug)]
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    pub struct DistinctUntilChangedErrResult<St, E> {
+        #[pin]
+        inner: FilterStatefulSync<St, ErrResultState<E>>,
+    }
+}
+
+impl<St, E> DistinctUntilChangedErrResult<St, E> {
+    pub(crate) const fn new(stream: St) -> Self {
+        Self {
+            inner: FilterStatefulSync {
+                stream,
+                state: ErrResultState(DistinctState::new()),
+            },
+        }
+    }
+}
+
+impl<St, T, E> Stream for DistinctUntilChangedErrResult<St, E>
 where
     St: Stream<Item = Result<T, E>>,
     E: Clone + PartialEq,
 {
-    filter_stateful_sync(
-        stream,
-        DistinctState::new(),
-        filter_distinct_until_changed_err_result,
-    )
+    delegate_stream_to_inner!();
 }
 
 #[cfg(test)]

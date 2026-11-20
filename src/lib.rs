@@ -15,10 +15,9 @@ use futures_util::{Stream, stream::Fuse};
 
 mod distinct;
 pub use self::distinct::{
-    DistinctState, distinct_until_changed, distinct_until_changed_by_key,
-    distinct_until_changed_err_result, distinct_until_changed_ok_result,
-    filter_distinct_until_changed, filter_distinct_until_changed_err_result,
-    filter_distinct_until_changed_ok_result,
+    DistinctState, DistinctUntilChanged, DistinctUntilChangedByKey, DistinctUntilChangedErrResult,
+    DistinctUntilChangedOkResult, filter_distinct_until_changed,
+    filter_distinct_until_changed_err_result, filter_distinct_until_changed_ok_result,
 };
 
 mod debounce;
@@ -142,6 +141,60 @@ fn pending_and_wake_if<T>(cx: &mut Context<'_>, stream_maybe_ready: bool) -> Pol
 /// Runtime-agnostic. Extensions that depend on the Tokio runtime are provided
 /// by `tokio::StreamExt` (requires the `tokio` feature).
 pub trait StreamExt: Stream {
+    /// Filters out subsequent/adjacent stream items.
+    ///
+    /// See also: [`filter_distinct_until_changed()`]
+    fn distinct_until_changed(self) -> DistinctUntilChanged<Self>
+    where
+        Self: Sized,
+        Self::Item: Clone + PartialEq,
+    {
+        DistinctUntilChanged::new(self)
+    }
+
+    /// Filters out subsequent/adjacent stream items with the same key.
+    ///
+    /// Compares the keys of stream items that are extracted by `key_fn`.
+    /// The key of each stream item is extracted once and the items are
+    /// passed through unmodified.
+    /// The last key is stored until a different key occurs.
+    ///
+    /// See also: [`distinct_until_changed()`](Self::distinct_until_changed)
+    fn distinct_until_changed_by_key<K, F>(
+        self,
+        initial_key: K,
+        key_fn: F,
+    ) -> DistinctUntilChangedByKey<Self, K, F>
+    where
+        Self: Sized,
+        K: PartialEq,
+        F: FnMut(&Self::Item) -> K,
+    {
+        DistinctUntilChangedByKey::new(self, initial_key, key_fn)
+    }
+
+    /// Filters out subsequent/adjacent `Ok` items in a result stream.
+    ///
+    /// See also: [`filter_distinct_until_changed_ok_result()`]
+    fn distinct_until_changed_ok_result<T, E>(self) -> DistinctUntilChangedOkResult<Self, T>
+    where
+        Self: Stream<Item = Result<T, E>> + Sized,
+        T: Clone + PartialEq,
+    {
+        DistinctUntilChangedOkResult::new(self)
+    }
+
+    /// Filters out subsequent/adjacent `Err` items in a result stream.
+    ///
+    /// See also: [`filter_distinct_until_changed_err_result()`]
+    fn distinct_until_changed_err_result<T, E>(self) -> DistinctUntilChangedErrResult<Self, E>
+    where
+        Self: Stream<Item = Result<T, E>> + Sized,
+        E: Clone + PartialEq,
+    {
+        DistinctUntilChangedErrResult::new(self)
+    }
+
     /// Debounces an input stream.
     ///
     /// Delays items until no more new items have arrived during the delay window.
