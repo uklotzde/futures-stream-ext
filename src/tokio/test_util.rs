@@ -49,7 +49,7 @@ pub(super) async fn collect_with_millis<S: Stream>(
     stream: S,
 ) -> Vec<(u128, S::Item)> {
     stream
-        .map(move |item| ((Instant::now() - started_at).as_millis(), item))
+        .map(move |item| (started_at.elapsed().as_millis(), item))
         .collect()
         .await
 }
