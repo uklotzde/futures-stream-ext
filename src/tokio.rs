@@ -9,15 +9,6 @@ use futures_util::Stream;
 
 use crate::{Debounced, StreamExt as _, ThrottleIntervalConfig, Throttled};
 
-#[cfg(test)]
-mod debounce;
-
-#[cfg(test)]
-mod throttle;
-
-#[cfg(test)]
-mod test_util;
-
 /// [`IntervalThrottler`](crate::IntervalThrottler) using [`tokio::time::Sleep`].
 pub type IntervalThrottler = crate::IntervalThrottler<tokio::time::Sleep>;
 
@@ -73,3 +64,6 @@ pub trait StreamExt: Stream {
 }
 
 impl<St: Stream> StreamExt for St {}
+
+#[cfg(test)]
+mod tests;
