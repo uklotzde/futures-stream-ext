@@ -3,7 +3,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use futures::StreamExt as _;
+use futures_util::{StreamExt as _, stream};
 use tokio::time::Instant;
 
 use super::test_util::{TIME_TICK, alternating_delay_stream, collect_with_millis};
@@ -200,7 +200,7 @@ async fn should_finish_on_empty_input_stream() {
             let config = ThrottleIntervalConfig { period, edge };
             assert_eq!(
                 Vec::<()>::new(),
-                futures::stream::empty::<()>()
+                stream::empty::<()>()
                     .throttle_interval(config, NonZeroUsize::MIN)
                     .collect::<Vec<_>>()
                     .await
@@ -216,7 +216,7 @@ async fn should_finish_after_non_empty_input_stream_has_completed() {
             let config = ThrottleIntervalConfig { period, edge };
             assert_eq!(
                 &[()],
-                futures::stream::once(async {})
+                stream::once(async {})
                     .throttle_interval(config, NonZeroUsize::MIN)
                     .collect::<Vec<_>>()
                     .await
@@ -234,7 +234,7 @@ async fn should_drain_an_always_ready_input_stream_between_ticks() {
         edge: IntervalEdge::Trailing,
     };
     let started_at = Instant::now();
-    let throttled = futures::stream::iter(0..5).throttle_interval(config, NonZeroUsize::MIN);
+    let throttled = stream::iter(0..5).throttle_interval(config, NonZeroUsize::MIN);
     let collected_items = collect_with_millis(started_at, throttled).await;
     // All items are ready immediately and only the last one is yielded
     // after the first interval has elapsed.

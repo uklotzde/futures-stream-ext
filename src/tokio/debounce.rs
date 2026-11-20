@@ -3,7 +3,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use futures::StreamExt as _;
+use futures_util::StreamExt as _;
 use tokio::time::Instant;
 
 use super::test_util::{

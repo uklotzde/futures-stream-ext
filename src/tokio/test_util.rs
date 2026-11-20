@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use futures::{Stream, StreamExt as _, stream};
+use futures_util::{Stream, StreamExt as _, stream};
 use tokio::time::{Instant, sleep_until};
 
 pub(super) const TIME_TICK: Duration = Duration::from_millis(1);
