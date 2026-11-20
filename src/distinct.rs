@@ -186,13 +186,13 @@ where
 ///
 /// See also: [`filter_distinct_until_changed()`]
 pub fn filter_distinct_until_changed_ok_result<T, E>(
-    last_ok: &mut DistinctState<T>,
+    state: &mut DistinctState<T>,
     next_result: &Result<T, E>,
 ) -> bool
 where
     T: Clone + PartialEq,
 {
-    filter_distinct_until_changed_some(last_ok, next_result.as_ref().ok())
+    filter_distinct_until_changed_some(state, next_result.as_ref().ok())
 }
 
 /// Filters out subsequent/adjacent `Ok` items in a result stream.
@@ -218,13 +218,13 @@ where
 ///
 /// See also: [`filter_distinct_until_changed()`]
 pub fn filter_distinct_until_changed_err_result<T, E>(
-    last_err: &mut DistinctState<E>,
+    state: &mut DistinctState<E>,
     next_result: &Result<T, E>,
 ) -> bool
 where
     E: Clone + PartialEq,
 {
-    filter_distinct_until_changed_some(last_err, next_result.as_ref().err())
+    filter_distinct_until_changed_some(state, next_result.as_ref().err())
 }
 
 /// Filters out subsequent/adjacent `Err` items in a result stream.
