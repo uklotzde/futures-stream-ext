@@ -18,7 +18,10 @@ use crate::{IntervalEdge, Sleep, pending_and_wake_if, poll_latest_ready, reset_o
 
 /// Callbacks for throttling a stream
 pub trait Throttler<T>: Stream<Item = ()> {
-    /// A new item has been received from the input stream.
+    /// A new item has been received from the input stream while idle.
+    ///
+    /// The throttler is idle initially and after `throttle_ready` has been
+    /// called with `None`. This method is not called again until then.
     ///
     /// After invocation of this method `throttle_ready` will be called
     /// with `Some` when the current interval has elapsed. The current
@@ -49,6 +52,9 @@ pin_project! {
         throttler: T,
         poll_next_max_ready_count: NonZeroUsize,
         pending: Option<S::Item>,
+        // Set until `throttle_pending` has been called and
+        // again after `throttle_ready` has been called with `None`.
+        throttler_idle: bool,
     }
 }
 
@@ -63,6 +69,7 @@ where
             throttler,
             poll_next_max_ready_count,
             pending: None,
+            throttler_idle: true,
         }
     }
 }
@@ -81,7 +88,8 @@ where
         let (latest_item, stream_maybe_ready) =
             poll_latest_ready(this.stream.as_mut(), cx, *this.poll_next_max_ready_count);
         if let Some(latest_item) = latest_item {
-            if this.pending.is_none() {
+            if *this.throttler_idle {
+                *this.throttler_idle = false;
                 this.throttler.as_mut().throttle_pending(cx);
             }
             *this.pending = Some(latest_item);
@@ -102,7 +110,9 @@ where
             this.throttler
                 .as_mut()
                 .throttle_ready(cx, next_item.as_ref());
-            if next_item.is_some() {
+            if next_item.is_none() {
+                *this.throttler_idle = true;
+            } else {
                 return Poll::Ready(next_item);
             }
         }
@@ -211,9 +221,7 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
             sleep,
             state,
         } = self.project();
-        if !matches!(state, IntervalThrottlerState::Idle) {
-            return;
-        }
+        debug_assert!(matches!(state, IntervalThrottlerState::Idle));
         *state = match config.edge {
             // The first tick is ready immediately.
             IntervalEdge::Leading => IntervalThrottlerState::TickNow,
