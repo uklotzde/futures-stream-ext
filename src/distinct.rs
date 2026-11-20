@@ -87,17 +87,56 @@ where
     }
 }
 
-/// Like [`filter_distinct_until_changed()`], but resets `last_item`
-/// and passes through if `next_item` is `None`.
-fn filter_distinct_until_changed_some<T>(last_item: &mut Option<T>, next_item: Option<&T>) -> bool
+/// State for filtering distinct values that are interrupted by other items.
+///
+/// Used by [`filter_distinct_until_changed_ok_result()`] and
+/// [`filter_distinct_until_changed_err_result()`]. Keeps the last value
+/// after an interruption to reuse its allocation.
+#[derive(Debug, Clone)]
+pub struct DistinctState<T> {
+    last_value: Option<T>,
+    interrupted: bool,
+}
+
+impl<T> DistinctState<T> {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            last_value: None,
+            interrupted: false,
+        }
+    }
+}
+
+impl<T> Default for DistinctState<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Like [`filter_distinct_until_changed()`], but passes through and
+/// interrupts the sequence if `next_value` is `None`.
+fn filter_distinct_until_changed_some<T>(
+    state: &mut DistinctState<T>,
+    next_value: Option<&T>,
+) -> bool
 where
     T: Clone + PartialEq,
 {
-    let Some(next_item) = next_item else {
-        *last_item = None;
+    let Some(next_value) = next_value else {
+        state.interrupted = true;
         return true;
     };
-    filter_distinct_until_changed(last_item, next_item)
+    if !state.interrupted {
+        return filter_distinct_until_changed(&mut state.last_value, next_value);
+    }
+    state.interrupted = false;
+    match &mut state.last_value {
+        // Reuse the existing allocation.
+        Some(last_value) => last_value.clone_from(next_value),
+        None => state.last_value = Some(next_value.clone()),
+    }
+    true
 }
 
 /// Filters out subsequent/adjacent stream items.
@@ -146,7 +185,7 @@ where
 ///
 /// See also: [`filter_distinct_until_changed()`]
 pub fn filter_distinct_until_changed_ok_result<T, E>(
-    last_ok: &mut Option<T>,
+    last_ok: &mut DistinctState<T>,
     next_result: &Result<T, E>,
 ) -> bool
 where
@@ -163,7 +202,11 @@ where
     S: Stream<Item = Result<T, E>>,
     T: Clone + PartialEq,
 {
-    filter_stateful_sync(stream, None, filter_distinct_until_changed_ok_result)
+    filter_stateful_sync(
+        stream,
+        DistinctState::new(),
+        filter_distinct_until_changed_ok_result,
+    )
 }
 
 /// Filters out subsequent/adjacent `Err` sequence items.
@@ -174,7 +217,7 @@ where
 ///
 /// See also: [`filter_distinct_until_changed()`]
 pub fn filter_distinct_until_changed_err_result<T, E>(
-    last_err: &mut Option<E>,
+    last_err: &mut DistinctState<E>,
     next_result: &Result<T, E>,
 ) -> bool
 where
@@ -191,7 +234,11 @@ where
     S: Stream<Item = Result<T, E>>,
     E: Clone + PartialEq,
 {
-    filter_stateful_sync(stream, None, filter_distinct_until_changed_err_result)
+    filter_stateful_sync(
+        stream,
+        DistinctState::new(),
+        filter_distinct_until_changed_err_result,
+    )
 }
 
 #[cfg(test)]
