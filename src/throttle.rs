@@ -127,8 +127,12 @@ pub struct ThrottleIntervalConfig {
 
 #[derive(Debug, Clone, Copy)]
 enum IntervalThrottlerState {
+    /// No items are pending.
     Idle,
-    Pending,
+    /// Items are pending and the next tick is ready immediately.
+    TickNow,
+    /// Items are pending and the next tick is ready when `sleep` has elapsed.
+    WaitForSleep,
 }
 
 pin_project! {
@@ -144,9 +148,6 @@ pin_project! {
         // Created on demand and reused afterwards.
         #[pin]
         sleep: Option<S>,
-        // Wait for `sleep` before the next tick.
-        // Always `false` if the period is zero.
-        sleep_armed: bool,
         state: IntervalThrottlerState,
     }
 }
@@ -157,7 +158,6 @@ impl<S: Sleep> IntervalThrottler<S> {
         Self {
             config,
             sleep: None,
-            sleep_armed: false,
             state: IntervalThrottlerState::Idle,
         }
     }
@@ -166,16 +166,14 @@ impl<S: Sleep> IntervalThrottler<S> {
 /// Starts the next interval.
 fn restart_interval<S: Sleep>(
     sleep: Pin<&mut Option<S>>,
-    sleep_armed: &mut bool,
     period: Duration,
-) {
+) -> IntervalThrottlerState {
     if period.is_zero() {
         // No throttling.
-        *sleep_armed = false;
-        return;
+        return IntervalThrottlerState::TickNow;
     }
     reset_or_sleep(sleep, period);
-    *sleep_armed = true;
+    IntervalThrottlerState::WaitForSleep
 }
 
 impl<S: Sleep> Stream for IntervalThrottler<S> {
@@ -185,24 +183,24 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
         let IntervalThrottlerProjection {
             config,
             sleep,
-            sleep_armed,
             state,
         } = self.project();
         match state {
-            IntervalThrottlerState::Idle => Poll::Pending,
-            IntervalThrottlerState::Pending => {
-                if *sleep_armed {
-                    let mut sleep = sleep.as_pin_mut().expect("sleep must exist while armed");
-                    ready!(sleep.as_mut().poll(cx));
-                    // Continue on a fixed schedule.
-                    sleep.reset_next_period(config.period);
-                } else {
-                    // The first tick or no throttling.
-                    restart_interval(sleep, sleep_armed, config.period);
-                }
-                Poll::Ready(Some(()))
+            IntervalThrottlerState::Idle => return Poll::Pending,
+            IntervalThrottlerState::TickNow => {
+                // The first tick or no throttling.
+                *state = restart_interval(sleep, config.period);
+            }
+            IntervalThrottlerState::WaitForSleep => {
+                let mut sleep = sleep
+                    .as_pin_mut()
+                    .expect("sleep must exist while waiting for it");
+                ready!(sleep.as_mut().poll(cx));
+                // Continue on a fixed schedule.
+                sleep.reset_next_period(config.period);
             }
         }
+        Poll::Ready(Some(()))
     }
 }
 
@@ -211,23 +209,21 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
         let IntervalThrottlerProjection {
             config,
             sleep,
-            sleep_armed,
             state,
         } = self.project();
-        if matches!(state, IntervalThrottlerState::Pending) {
+        if !matches!(state, IntervalThrottlerState::Idle) {
             return;
         }
-        *state = IntervalThrottlerState::Pending;
-        match config.edge {
+        *state = match config.edge {
             // The first tick is ready immediately.
-            IntervalEdge::Leading => *sleep_armed = false,
-            IntervalEdge::Trailing => restart_interval(sleep, sleep_armed, config.period),
-        }
+            IntervalEdge::Leading => IntervalThrottlerState::TickNow,
+            IntervalEdge::Trailing => restart_interval(sleep, config.period),
+        };
     }
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
         let state = self.project().state;
-        assert!(matches!(state, IntervalThrottlerState::Pending));
+        assert!(!matches!(state, IntervalThrottlerState::Idle));
         if next_item.is_none() {
             *state = IntervalThrottlerState::Idle;
         }
