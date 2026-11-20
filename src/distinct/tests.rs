@@ -7,7 +7,7 @@ use futures_util::StreamExt as _;
 async fn distinct_until_changed() {
     let input = futures_util::stream::iter([1, 1, 2, 1, 2, 2, 2, 3, 3]);
     let expected_output = vec![1, 2, 1, 2, 3];
-    let actual_output = super::distinct_until_changed(input.clone())
+    let actual_output = super::distinct_until_changed(input)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
@@ -17,10 +17,9 @@ async fn distinct_until_changed() {
 async fn distinct_until_changed_map() {
     let input = futures_util::stream::iter([1, 1, 2, 1, 2, 2, 4, 5, 2, 3, 3, 7]);
     let expected_output = vec![1, 2, 1, 2, 4, 2, 7];
-    let actual_output =
-        super::distinct_until_changed_map(input.clone(), None, |item| Some(item / 2))
-            .collect::<Vec<_>>()
-            .await;
+    let actual_output = super::distinct_until_changed_map(input, None, |item| Some(item / 2))
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(expected_output, actual_output);
 }
 
@@ -38,7 +37,7 @@ async fn distinct_until_changed_ok_result() {
         Ok(3),
     ]);
     let expected_output = vec![Ok(1), Ok(2), Err(1), Ok(2), Err(2), Err(2), Ok(3)];
-    let actual_output = super::distinct_until_changed_ok_result(input.clone())
+    let actual_output = super::distinct_until_changed_ok_result(input)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
@@ -58,7 +57,7 @@ async fn distinct_until_changed_err_result() {
         Err(3),
     ]);
     let expected_output = vec![Err(1), Err(2), Ok(1), Err(2), Ok(2), Ok(2), Err(3)];
-    let actual_output = super::distinct_until_changed_err_result(input.clone())
+    let actual_output = super::distinct_until_changed_err_result(input)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);

@@ -15,14 +15,32 @@ pub fn filter_distinct_until_changed<T>(last_item: &mut Option<T>, next_item: &T
 where
     T: Clone + PartialEq,
 {
-    if let Some(last_item) = last_item
-        && last_item == next_item
-    {
+    match last_item {
         // Discard the next item.
-        return false;
+        Some(last_item) if last_item == next_item => false,
+        Some(last_item) => {
+            // Reuse the existing allocation.
+            last_item.clone_from(next_item);
+            true
+        }
+        None => {
+            *last_item = Some(next_item.clone());
+            true
+        }
     }
-    *last_item = Some(next_item.clone());
-    true
+}
+
+/// Like [`filter_distinct_until_changed()`], but resets `last_item`
+/// and passes through if `next_item` is `None`.
+fn filter_distinct_until_changed_some<T>(last_item: &mut Option<T>, next_item: Option<&T>) -> bool
+where
+    T: Clone + PartialEq,
+{
+    let Some(next_item) = next_item else {
+        *last_item = None;
+        return true;
+    };
+    filter_distinct_until_changed(last_item, next_item)
 }
 
 /// Filters out subsequent/adjacent stream items.
@@ -77,18 +95,7 @@ pub fn filter_distinct_until_changed_ok_result<T, E>(
 where
     T: Clone + PartialEq,
 {
-    if let Ok(next_ok) = &next_result {
-        if let Some(last_ok) = &last_ok
-            && last_ok == next_ok
-        {
-            // Discard the next item.
-            return false;
-        }
-        *last_ok = Some(next_ok.clone());
-    } else {
-        *last_ok = None;
-    }
-    true
+    filter_distinct_until_changed_some(last_ok, next_result.as_ref().ok())
 }
 
 /// Filters out subsequent/adjacent `Ok` items in a result stream.
@@ -116,18 +123,7 @@ pub fn filter_distinct_until_changed_err_result<T, E>(
 where
     E: Clone + PartialEq,
 {
-    if let Err(next_err) = &next_result {
-        if let Some(last_err) = &last_err
-            && last_err == next_err
-        {
-            // Discard the next item.
-            return false;
-        }
-        *last_err = Some(next_err.clone());
-    } else {
-        *last_err = None;
-    }
-    true
+    filter_distinct_until_changed_some(last_err, next_result.as_ref().err())
 }
 
 /// Filters out subsequent/adjacent `Err` items in a result stream.
