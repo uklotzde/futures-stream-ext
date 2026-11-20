@@ -46,5 +46,8 @@ jobs:
           # The cache should not be shared between different workflows and jobs.
           shared-key: ${{ github.workflow }}-${{ github.job }}
 
-      - name: Run tests
+      - name: Run tests (no default features)
+        run: cargo test --locked --no-default-features
+
+      - name: Run tests (all features)
         run: cargo test --locked --all-features
