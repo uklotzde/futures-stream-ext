@@ -66,7 +66,7 @@ where
     St: Stream,
     Th: Throttler<<St as Stream>::Item>,
 {
-    pub fn new(stream: St, throttler: Th, poll_next_max_ready_count: NonZeroUsize) -> Self {
+    pub(crate) fn new(stream: St, throttler: Th, poll_next_max_ready_count: NonZeroUsize) -> Self {
         Self {
             stream: stream.fuse(),
             throttler,
