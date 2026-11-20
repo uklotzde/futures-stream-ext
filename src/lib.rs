@@ -152,7 +152,7 @@ pub trait StreamExt: Stream {
     /// The delay is implemented by the given [`Sleep`] type.
     ///
     /// The `poll_next_max_ready_count` argument controls how many _Ready_ items
-    /// are polled subsequently in a row from the input stream during an invocation
+    /// are polled consecutively from the input stream during an invocation
     /// of [`Stream::poll_next()`] before polling the delay. This limit ensures
     /// that input streams which are always ready are not polled forever.
     /// See also: [`throttle()`](Self::throttle)
@@ -172,12 +172,12 @@ pub trait StreamExt: Stream {
     /// The throttler defines the throttling strategy.
     ///
     /// The `poll_next_max_ready_count` argument controls how many _Ready_ items
-    /// are polled subsequently in a row from the input stream during an invocation
+    /// are polled consecutively from the input stream during an invocation
     /// of [`Stream::poll_next()`] before polling the throttler. This limit
     /// ensures that input streams which are always ready are not polled forever.
     ///
     /// A value of [`NonZeroUsize::MIN`] will poll the input stream only once and
-    /// could be used as a save default. Using a greater value to skip multiple
+    /// could be used as a safe default. Using a greater value to skip multiple
     /// items at once will reduce the number of calls to the throttler and
     /// improves the performance and efficiency.
     fn throttle<Th>(
