@@ -3,12 +3,39 @@
 
 //! Shared test utilities with a paused Tokio clock.
 
-use std::time::Duration;
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use futures_util::{Stream, StreamExt as _, stream};
 use tokio::time::{Instant, sleep_until};
 
+use crate::Sleep;
+
 pub(super) const TIME_TICK: Duration = Duration::from_millis(1);
+
+/// A [`Sleep`] that only implements [`Sleep::sleep()`].
+///
+/// Exercises the default implementations of [`Sleep::reset()`] and
+/// [`Sleep::reset_next_period()`].
+#[derive(Debug)]
+pub(super) struct DefaultResetSleep(Pin<Box<tokio::time::Sleep>>);
+
+impl Future for DefaultResetSleep {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
+    }
+}
+
+impl Sleep for DefaultResetSleep {
+    fn sleep(duration: Duration) -> Self {
+        Self(Box::pin(tokio::time::sleep(duration)))
+    }
+}
 
 /// Infinite stream of items `0, 1, 2, ...` with alternating delays.
 ///

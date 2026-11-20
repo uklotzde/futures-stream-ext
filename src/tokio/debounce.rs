@@ -7,9 +7,22 @@ use futures_util::StreamExt as _;
 use tokio::time::Instant;
 
 use super::test_util::{
-    TIME_TICK, alternating_delay_stream, collect_with_millis, scheduled_stream,
+    DefaultResetSleep, TIME_TICK, alternating_delay_stream, collect_with_millis, scheduled_stream,
 };
-use crate::tokio::StreamExt as _;
+use crate::{Sleep, StreamExt as _};
+
+/// Debounces a periodic input stream with the given sleep.
+async fn debounce_periodic_with_sleep<S: Sleep>(
+    debounce_delay: Duration,
+    item_period: Duration,
+    num_items: usize,
+) -> Vec<(u128, usize)> {
+    let started_at = Instant::now();
+    let debounced = alternating_delay_stream(started_at, item_period, item_period)
+        .debounce_with_sleep::<S>(debounce_delay, NonZeroUsize::MIN)
+        .take(num_items);
+    collect_with_millis(started_at, debounced).await
+}
 
 #[tokio::test(start_paused = true)]
 async fn should_debounce_a_periodic_input_stream() {
@@ -27,13 +40,23 @@ async fn should_debounce_a_periodic_input_stream() {
         (146, 8),
         (163, 9),
     ];
-    let started_at = Instant::now();
-    let debounced = alternating_delay_stream(started_at, item_period, item_period)
-        .debounce(debounce_delay, NonZeroUsize::MIN)
-        .take(expected.len());
     assert_eq!(
         expected.as_slice(),
-        collect_with_millis(started_at, debounced).await
+        debounce_periodic_with_sleep::<tokio::time::Sleep>(
+            debounce_delay,
+            item_period,
+            expected.len()
+        )
+        .await
+    );
+    assert_eq!(
+        expected.as_slice(),
+        debounce_periodic_with_sleep::<DefaultResetSleep>(
+            debounce_delay,
+            item_period,
+            expected.len()
+        )
+        .await
     );
 }
 
@@ -43,19 +66,46 @@ async fn should_debounce_a_periodic_input_stream() {
 /// Returns the emitted items with their emission time.
 async fn debounce_schedule(
     debounce_delay: Duration,
-    schedule: impl IntoIterator<Item = (u64, usize)>,
+    schedule: impl IntoIterator<Item = (u64, usize)> + Clone,
 ) -> Vec<(u128, usize)> {
     debounce_schedule_with_max_ready_count(debounce_delay, schedule, NonZeroUsize::MIN).await
 }
 
+/// Like [`debounce_schedule()`], but with a custom `poll_next_max_ready_count`.
+///
+/// Runs both with [`tokio::time::Sleep`] and [`DefaultResetSleep`], which
+/// must produce the same results.
 async fn debounce_schedule_with_max_ready_count(
+    debounce_delay: Duration,
+    schedule: impl IntoIterator<Item = (u64, usize)> + Clone,
+    poll_next_max_ready_count: NonZeroUsize,
+) -> Vec<(u128, usize)> {
+    let collected = debounce_schedule_with_sleep::<tokio::time::Sleep>(
+        debounce_delay,
+        schedule.clone(),
+        poll_next_max_ready_count,
+    )
+    .await;
+    assert_eq!(
+        collected,
+        debounce_schedule_with_sleep::<DefaultResetSleep>(
+            debounce_delay,
+            schedule,
+            poll_next_max_ready_count,
+        )
+        .await
+    );
+    collected
+}
+
+async fn debounce_schedule_with_sleep<S: Sleep>(
     debounce_delay: Duration,
     schedule: impl IntoIterator<Item = (u64, usize)>,
     poll_next_max_ready_count: NonZeroUsize,
 ) -> Vec<(u128, usize)> {
     let started_at = Instant::now();
-    let debounced =
-        scheduled_stream(started_at, schedule).debounce(debounce_delay, poll_next_max_ready_count);
+    let debounced = scheduled_stream(started_at, schedule)
+        .debounce_with_sleep::<S>(debounce_delay, poll_next_max_ready_count);
     collect_with_millis(started_at, debounced).await
 }
 

@@ -6,10 +6,42 @@ use std::{num::NonZeroUsize, time::Duration};
 use futures_util::{StreamExt as _, stream};
 use tokio::time::Instant;
 
-use super::test_util::{TIME_TICK, alternating_delay_stream, collect_with_millis};
-use crate::{IntervalEdge, ThrottleIntervalConfig, tokio::StreamExt as _};
+use super::test_util::{
+    DefaultResetSleep, TIME_TICK, alternating_delay_stream, collect_with_millis,
+};
+use crate::{IntervalEdge, Sleep, StreamExt as _, ThrottleIntervalConfig, tokio::StreamExt as _};
 
+/// Throttles an alternating delay stream.
+///
+/// Runs both with [`tokio::time::Sleep`] and [`DefaultResetSleep`], which
+/// must produce the same results.
 async fn run_alternating_delay_stream(
+    config: ThrottleIntervalConfig,
+    first_delay: Duration,
+    second_delay: Duration,
+    num_items: usize,
+) -> Vec<(u128, usize)> {
+    let collected = run_alternating_delay_stream_with_sleep::<tokio::time::Sleep>(
+        config,
+        first_delay,
+        second_delay,
+        num_items,
+    )
+    .await;
+    assert_eq!(
+        collected,
+        run_alternating_delay_stream_with_sleep::<DefaultResetSleep>(
+            config,
+            first_delay,
+            second_delay,
+            num_items,
+        )
+        .await
+    );
+    collected
+}
+
+async fn run_alternating_delay_stream_with_sleep<S: Sleep>(
     config: ThrottleIntervalConfig,
     first_delay: Duration,
     second_delay: Duration,
@@ -17,7 +49,7 @@ async fn run_alternating_delay_stream(
 ) -> Vec<(u128, usize)> {
     let started_at = Instant::now();
     let throttled = alternating_delay_stream(started_at, first_delay, second_delay)
-        .throttle_interval(config, NonZeroUsize::MIN)
+        .throttle_interval_with_sleep::<S>(config, NonZeroUsize::MIN)
         .take(num_items);
     collect_with_millis(started_at, throttled).await
 }
