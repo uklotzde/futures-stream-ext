@@ -95,12 +95,11 @@ where
                             this.throttler.as_mut().throttle_pending(cx);
                         }
                         *this.pending = Some(item);
-                        debug_assert!(ready_count < this.poll_next_max_ready_count.get());
                         ready_count += 1;
                         if ready_count >= this.poll_next_max_ready_count.get() {
                             // Stop polling the inner stream to prevent endless loops
                             // for streams that are always ready.
-                            // Wake ourselves up to ensure that polling the stream continues after
+                            // Wake ourselves up to ensure that polling the stream continues
                             // after polling the throttler.
                             cx.waker().wake_by_ref();
                             break;
@@ -134,11 +133,9 @@ where
             State::Finishing => {
                 if this.pending.is_some() {
                     ready!(this.throttler.as_mut().poll_next(cx));
-                    let last_item = this.pending.take();
-                    // Wake ourselves up for the final state transition from `Finishing`
-                    // to `Finished` that becomes ready immediately.
-                    cx.waker().wake_by_ref();
-                    Poll::Ready(last_item)
+                    // The consumer will poll again after receiving this item,
+                    // which triggers the final state transition.
+                    Poll::Ready(this.pending.take())
                 } else {
                     // The final state transition.
                     *this.state = State::Finished;
