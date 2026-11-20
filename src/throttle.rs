@@ -35,6 +35,9 @@ pub trait Throttler<T>: Stream<Item = ()> {
 
     /// The current interval has elapsed.
     ///
+    /// Called after each tick before the throttler is polled again. The
+    /// throttler should start the next interval only if `next_item` is `Some`.
+    ///
     /// Provides the pending item of the throttled input stream that is ready
     /// or `None` if no item has been received from the input stream during
     /// the last interval.
@@ -190,26 +193,19 @@ impl<S: Sleep> Stream for IntervalThrottler<S> {
     type Item = ();
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let IntervalThrottlerProjection {
-            config,
-            sleep,
-            state,
-        } = self.project();
+        let IntervalThrottlerProjection { sleep, state, .. } = self.project();
         match state {
             IntervalThrottlerState::Idle => return Poll::Pending,
-            IntervalThrottlerState::TickNow => {
-                // The first tick or no throttling.
-                *state = restart_interval(sleep, config.period);
-            }
+            // The first tick or no throttling.
+            IntervalThrottlerState::TickNow => (),
             IntervalThrottlerState::WaitForSleep => {
-                let mut sleep = sleep
+                let sleep = sleep
                     .as_pin_mut()
                     .expect("sleep must exist while waiting for it");
-                ready!(sleep.as_mut().poll(cx));
-                // Continue on a fixed schedule.
-                sleep.reset_next_period(config.period);
+                ready!(sleep.poll(cx));
             }
         }
+        // The next interval is started by `throttle_ready()`.
         Poll::Ready(Some(()))
     }
 }
@@ -230,10 +226,26 @@ impl<T, S: Sleep> Throttler<T> for IntervalThrottler<S> {
     }
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
-        let state = self.project().state;
-        assert!(!matches!(state, IntervalThrottlerState::Idle));
+        let IntervalThrottlerProjection {
+            config,
+            sleep,
+            state,
+        } = self.project();
         if next_item.is_none() {
+            // Leave the elapsed sleep unarmed until items are pending again.
             *state = IntervalThrottlerState::Idle;
+            return;
+        }
+        match state {
+            IntervalThrottlerState::Idle => panic!("throttle_ready called while idle"),
+            IntervalThrottlerState::TickNow => *state = restart_interval(sleep, config.period),
+            IntervalThrottlerState::WaitForSleep => {
+                // Continue on a fixed schedule.
+                sleep
+                    .as_pin_mut()
+                    .expect("sleep must exist while waiting for it")
+                    .reset_next_period(config.period);
+            }
         }
     }
 }
