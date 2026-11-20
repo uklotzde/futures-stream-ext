@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, pin::pin, time::Duration};
 
-use futures_util::{StreamExt as _, stream};
-use tokio::time::Instant;
+use futures_util::{Stream, StreamExt as _, stream};
+use tokio::time::{Instant, sleep};
 
 use super::test_util::{
     DefaultResetSleep, TIME_TICK, alternating_delay_stream, collect_with_millis,
@@ -13,8 +13,11 @@ use crate::{IntervalEdge, Sleep, StreamExt as _, ThrottleIntervalConfig, tokio::
 
 /// Throttles an alternating delay stream.
 ///
-/// Runs both with [`tokio::time::Sleep`] and [`DefaultResetSleep`], which
-/// must produce the same results.
+/// Runs both with [`tokio::time::Sleep`] and [`DefaultResetSleep`]. Their
+/// results only match if the throttled stream is polled at each deadline,
+/// i.e. if the consumer is never late. Otherwise the fixed schedule of
+/// [`tokio::time::Sleep`] and the drifting schedule of [`DefaultResetSleep`]
+/// diverge.
 async fn run_alternating_delay_stream(
     config: ThrottleIntervalConfig,
     first_delay: Duration,
@@ -208,14 +211,28 @@ fn finish_test_configs() -> impl Iterator<Item = ThrottleIntervalConfig> {
         })
 }
 
+/// Throttles the input stream and collects all items.
+async fn collect_throttled_with_sleep<S: Sleep, St: Stream>(
+    stream: St,
+    config: ThrottleIntervalConfig,
+) -> Vec<St::Item> {
+    stream
+        .throttle_interval_with_sleep::<S>(config, NonZeroUsize::MIN)
+        .collect()
+        .await
+}
+
 #[tokio::test]
 async fn should_finish_on_empty_input_stream() {
     for config in finish_test_configs() {
         assert_eq!(
             Vec::<()>::new(),
-            stream::empty::<()>()
-                .throttle_interval(config, NonZeroUsize::MIN)
-                .collect::<Vec<_>>()
+            collect_throttled_with_sleep::<tokio::time::Sleep, _>(stream::empty::<()>(), config)
+                .await
+        );
+        assert_eq!(
+            Vec::<()>::new(),
+            collect_throttled_with_sleep::<DefaultResetSleep, _>(stream::empty::<()>(), config)
                 .await
         );
     }
@@ -225,27 +242,67 @@ async fn should_finish_on_empty_input_stream() {
 async fn should_finish_after_non_empty_input_stream_has_completed() {
     for config in finish_test_configs() {
         assert_eq!(
-            &[()],
-            stream::once(async {})
-                .throttle_interval(config, NonZeroUsize::MIN)
-                .collect::<Vec<_>>()
+            vec![()],
+            collect_throttled_with_sleep::<tokio::time::Sleep, _>(stream::once(async {}), config)
                 .await
-                .as_slice()
+        );
+        assert_eq!(
+            vec![()],
+            collect_throttled_with_sleep::<DefaultResetSleep, _>(stream::once(async {}), config)
+                .await
         );
     }
 }
 
-#[tokio::test(start_paused = true)]
-async fn should_drain_an_always_ready_input_stream_between_ticks() {
-    let period = TIME_TICK.saturating_mul(10);
+async fn drain_always_ready_input_stream_with_sleep<S: Sleep>() -> Vec<(u128, usize)> {
     let config = ThrottleIntervalConfig {
-        period,
+        period: TIME_TICK.saturating_mul(10),
         edge: IntervalEdge::Trailing,
     };
     let started_at = Instant::now();
-    let throttled = stream::iter(0..5).throttle_interval(config, NonZeroUsize::MIN);
-    let collected_items = collect_with_millis(started_at, throttled).await;
+    let throttled = stream::iter(0..5).throttle_interval_with_sleep::<S>(config, NonZeroUsize::MIN);
+    collect_with_millis(started_at, throttled).await
+}
+
+#[tokio::test(start_paused = true)]
+async fn should_drain_an_always_ready_input_stream_between_ticks() {
     // All items are ready immediately and only the last one is yielded
     // after the first interval has elapsed.
-    assert_eq!(vec![(10, 4)], collected_items);
+    let expected_items = vec![(10, 4)];
+    assert_eq!(
+        expected_items,
+        drain_always_ready_input_stream_with_sleep::<tokio::time::Sleep>().await
+    );
+    assert_eq!(
+        expected_items,
+        drain_always_ready_input_stream_with_sleep::<DefaultResetSleep>().await
+    );
+}
+
+/// Only for [`tokio::time::Sleep`], which keeps a fixed schedule.
+/// [`DefaultResetSleep`] is allowed to drift when polled late.
+#[tokio::test(start_paused = true)]
+async fn should_keep_the_fixed_schedule_and_skip_missed_periods_if_polled_late() {
+    // A new item arrives every millisecond.
+    let started_at = Instant::now();
+    let config = ThrottleIntervalConfig {
+        period: TIME_TICK.saturating_mul(10),
+        edge: IntervalEdge::Trailing,
+    };
+    let mut throttled = pin!(
+        alternating_delay_stream(started_at, TIME_TICK, TIME_TICK)
+            .throttle_interval(config, NonZeroUsize::MIN)
+    );
+    let mut tick_millis = Vec::new();
+    while tick_millis.len() < 4 {
+        throttled.next().await.unwrap();
+        tick_millis.push(started_at.elapsed().as_millis());
+        if tick_millis.len() == 1 {
+            // Miss the deadline at 20 ms by 15 ms.
+            sleep(TIME_TICK.saturating_mul(25)).await;
+        }
+    }
+    // The late tick at 35 ms is followed by the next deadline on the
+    // original schedule at 40 ms, not 10 ms after the late poll at 45 ms.
+    assert_eq!(vec![10, 35, 40, 50], tick_millis);
 }

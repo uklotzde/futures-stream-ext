@@ -74,7 +74,8 @@ async fn debounce_schedule(
 /// Like [`debounce_schedule()`], but with a custom `poll_next_max_ready_count`.
 ///
 /// Runs both with [`tokio::time::Sleep`] and [`DefaultResetSleep`], which
-/// must produce the same results.
+/// must produce the same results. Debouncing always restarts the delay from
+/// now, so both sleeps behave identically regardless of when they are polled.
 async fn debounce_schedule_with_max_ready_count(
     debounce_delay: Duration,
     schedule: impl IntoIterator<Item = (u64, usize)> + Clone,
