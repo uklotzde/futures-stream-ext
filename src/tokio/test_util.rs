@@ -71,10 +71,10 @@ pub(super) fn scheduled_stream(
 }
 
 /// Collects all items with their emission time (milliseconds since `started_at`).
-pub(super) async fn collect_with_millis<S: Stream>(
+pub(super) async fn collect_with_millis<St: Stream>(
     started_at: Instant,
-    stream: S,
-) -> Vec<(u128, S::Item)> {
+    stream: St,
+) -> Vec<(u128, St::Item)> {
     stream
         .map(move |item| (started_at.elapsed().as_millis(), item))
         .collect()

@@ -180,14 +180,14 @@ pub trait StreamExt: Stream {
     /// could be used as a save default. Using a greater value to skip multiple
     /// items at once will reduce the number of calls to the throttler and
     /// improves the performance and efficiency.
-    fn throttle<T>(
+    fn throttle<Th>(
         self,
-        throttler: T,
+        throttler: Th,
         poll_next_max_ready_count: NonZeroUsize,
-    ) -> Throttled<Self, T>
+    ) -> Throttled<Self, Th>
     where
         Self: Sized,
-        T: Throttler<Self::Item>,
+        Th: Throttler<Self::Item>,
     {
         Throttled::new(self, throttler, poll_next_max_ready_count)
     }
@@ -209,7 +209,7 @@ pub trait StreamExt: Stream {
     }
 }
 
-impl<S: Stream> StreamExt for S {}
+impl<St: Stream> StreamExt for St {}
 
 #[cfg(test)]
 mod tests;

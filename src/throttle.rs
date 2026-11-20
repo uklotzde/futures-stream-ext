@@ -48,25 +48,25 @@ pin_project! {
     /// Throttled stream
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled or .awaited"]
-    pub struct Throttled<S: Stream, T: Throttler<<S as Stream>::Item>> {
+    pub struct Throttled<St: Stream, Th: Throttler<<St as Stream>::Item>> {
         #[pin]
-        stream: Fuse<S>,
+        stream: Fuse<St>,
         #[pin]
-        throttler: T,
+        throttler: Th,
         poll_next_max_ready_count: NonZeroUsize,
-        pending: Option<S::Item>,
+        pending: Option<St::Item>,
         // Set until `throttle_pending` has been called and
         // again after `throttle_ready` has been called with `None`.
         throttler_idle: bool,
     }
 }
 
-impl<S, T> Throttled<S, T>
+impl<St, Th> Throttled<St, Th>
 where
-    S: Stream,
-    T: Throttler<<S as Stream>::Item>,
+    St: Stream,
+    Th: Throttler<<St as Stream>::Item>,
 {
-    pub fn new(stream: S, throttler: T, poll_next_max_ready_count: NonZeroUsize) -> Self {
+    pub fn new(stream: St, throttler: Th, poll_next_max_ready_count: NonZeroUsize) -> Self {
         Self {
             stream: stream.fuse(),
             throttler,
@@ -77,12 +77,12 @@ where
     }
 }
 
-impl<S, T> Stream for Throttled<S, T>
+impl<St, Th> Stream for Throttled<St, Th>
 where
-    S: Stream,
-    T: Throttler<<S as Stream>::Item>,
+    St: Stream,
+    Th: Throttler<<St as Stream>::Item>,
 {
-    type Item = S::Item;
+    type Item = St::Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();

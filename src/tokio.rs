@@ -72,4 +72,4 @@ pub trait StreamExt: Stream {
     }
 }
 
-impl<S: Stream> StreamExt for S {}
+impl<St: Stream> StreamExt for St {}
