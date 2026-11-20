@@ -1,20 +1,65 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use futures_util::{Stream, StreamExt as _};
+use std::{
+    pin::Pin,
+    task::{Context, Poll, ready},
+};
 
-fn filter_stateful_sync<S, T, F>(
+use futures_util::Stream;
+use pin_project_lite::pin_project;
+
+pin_project! {
+    /// Filters stream items synchronously with a stateful predicate.
+    ///
+    /// Unlike [`StreamExt::filter()`](futures_util::StreamExt::filter) it
+    /// neither buffers the item nor creates a future for each item.
+    #[must_use = "streams do nothing unless polled or .awaited"]
+    struct FilterStatefulSync<S, T, F> {
+        #[pin]
+        stream: S,
+        state: T,
+        filter_update_state_fn: F,
+    }
+}
+
+impl<S, T, F> Stream for FilterStatefulSync<S, T, F>
+where
+    S: Stream,
+    F: FnMut(&mut T, &S::Item) -> bool,
+{
+    type Item = S::Item;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut this = self.project();
+        while let Some(next_item) = ready!(this.stream.as_mut().poll_next(cx)) {
+            if (this.filter_update_state_fn)(this.state, &next_item) {
+                return Poll::Ready(Some(next_item));
+            }
+        }
+        Poll::Ready(None)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.stream.size_hint();
+        (0, upper)
+    }
+}
+
+const fn filter_stateful_sync<S, T, F>(
     stream: S,
     initial_state: T,
-    mut filter_update_state_fn: F,
+    filter_update_state_fn: F,
 ) -> impl Stream<Item = S::Item>
 where
     S: Stream,
     F: FnMut(&mut T, &S::Item) -> bool,
 {
-    let mut state = initial_state;
-    stream
-        .filter(move |next_item| std::future::ready(filter_update_state_fn(&mut state, next_item)))
+    FilterStatefulSync {
+        stream,
+        state: initial_state,
+        filter_update_state_fn,
+    }
 }
 
 /// Filtering of subsequent/adjacent sequence items.
