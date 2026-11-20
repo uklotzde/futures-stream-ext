@@ -259,3 +259,21 @@ async fn should_finish_after_non_empty_input_stream_has_completed() {
         }
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn should_drain_an_always_ready_input_stream_between_ticks() {
+    let period = TIME_TICK.saturating_mul(10);
+    let config = ThrottleIntervalConfig {
+        period,
+        edge: IntervalEdge::Trailing,
+    };
+    let started_at = Instant::now();
+    let collected_items = stream::iter(0..5)
+        .throttle_interval(config, NonZeroUsize::MIN)
+        .map(|item| ((Instant::now() - started_at).as_millis(), item))
+        .collect::<Vec<_>>()
+        .await;
+    // All items are ready immediately and only the last one is yielded
+    // after the first interval has elapsed.
+    assert_eq!(vec![(10, 4)], collected_items);
+}

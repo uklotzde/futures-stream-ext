@@ -84,6 +84,9 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
 
+        // Set if polling the inner stream has been stopped while it might
+        // still be ready.
+        let mut stream_maybe_ready = false;
         if matches!(this.state, State::Streaming) {
             // Poll the inner stream while it yields items. We want to receive
             // the most recent item that is ready.
@@ -99,9 +102,7 @@ where
                         if ready_count >= this.poll_next_max_ready_count.get() {
                             // Stop polling the inner stream to prevent endless loops
                             // for streams that are always ready.
-                            // Wake ourselves up to ensure that polling the stream continues
-                            // after polling the throttler.
-                            cx.waker().wake_by_ref();
+                            stream_maybe_ready = true;
                             break;
                         }
                     }
@@ -119,16 +120,22 @@ where
         // Poll the throttler.
         match this.state {
             State::Streaming => {
-                ready!(this.throttler.as_mut().poll_next(cx));
-                let next_item = this.pending.take();
-                this.throttler
-                    .as_mut()
-                    .throttle_ready(cx, next_item.as_ref());
-                if next_item.is_some() {
-                    Poll::Ready(next_item)
-                } else {
-                    Poll::Pending
+                if this.throttler.as_mut().poll_next(cx).is_ready() {
+                    let next_item = this.pending.take();
+                    this.throttler
+                        .as_mut()
+                        .throttle_ready(cx, next_item.as_ref());
+                    if next_item.is_some() {
+                        return Poll::Ready(next_item);
+                    }
                 }
+                if stream_maybe_ready {
+                    // Wake ourselves up to ensure that polling the inner stream
+                    // continues. Not needed when returning `Ready`, because the
+                    // consumer will poll again anyway.
+                    cx.waker().wake_by_ref();
+                }
+                Poll::Pending
             }
             State::Finishing => {
                 if this.pending.is_some() {
