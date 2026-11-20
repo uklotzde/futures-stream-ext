@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The futures-stream-ext authors
 // SPDX-License-Identifier: MPL-2.0
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use futures::{Stream, StreamExt as _, stream};
 use tokio::{
@@ -38,7 +38,7 @@ fn run_periodic_stream_debounced(
         let started_at = Instant::now();
         let join_handle = rt_handle.spawn(
             periodic_stream(started_at, item_period)
-                .debounce(debounce_delay)
+                .debounce(debounce_delay, NonZeroUsize::MIN)
                 .map(move |item| ((Instant::now() - started_at).as_millis(), item))
                 .take(num_items)
                 .collect::<Vec<_>>(),
@@ -80,13 +80,21 @@ async fn debounce_schedule(
     debounce_delay: Duration,
     schedule: impl IntoIterator<Item = (u64, usize)>,
 ) -> Vec<(u128, usize)> {
+    debounce_schedule_with_max_ready_count(debounce_delay, schedule, NonZeroUsize::MIN).await
+}
+
+async fn debounce_schedule_with_max_ready_count(
+    debounce_delay: Duration,
+    schedule: impl IntoIterator<Item = (u64, usize)>,
+    poll_next_max_ready_count: NonZeroUsize,
+) -> Vec<(u128, usize)> {
     let started_at = Instant::now();
     stream::iter(schedule)
         .then(move |(arrival_millis, item)| async move {
             sleep_until(started_at + Duration::from_millis(arrival_millis)).await;
             item
         })
-        .debounce(debounce_delay)
+        .debounce(debounce_delay, poll_next_max_ready_count)
         .map(move |item| ((Instant::now() - started_at).as_millis(), item))
         .collect()
         .await
@@ -153,7 +161,16 @@ async fn should_emit_the_pending_item_after_the_input_stream_has_finished() {
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_items_immediately_with_zero_delay() {
-    let collected = debounce_schedule(Duration::ZERO, [(0, 0), (5, 1), (5, 2), (7, 3)]).await;
-    // Items that are ready at the same time are still debounced.
-    assert_eq!(vec![(0, 0), (5, 2), (7, 3)], collected);
+    let schedule = [(0, 0), (5, 1), (5, 2), (7, 3)];
+    // Items that are ready at the same time are still debounced
+    // if they are polled together.
+    assert_eq!(
+        vec![(0, 0), (5, 2), (7, 3)],
+        debounce_schedule_with_max_ready_count(Duration::ZERO, schedule, NonZeroUsize::MAX).await
+    );
+    // Otherwise each of them is emitted.
+    assert_eq!(
+        vec![(0, 0), (5, 1), (5, 2), (7, 3)],
+        debounce_schedule_with_max_ready_count(Duration::ZERO, schedule, NonZeroUsize::MIN).await
+    );
 }

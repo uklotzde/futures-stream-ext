@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    num::NonZeroUsize,
     pin::Pin,
-    task::{Context, Poll, ready},
+    task::{Context, Poll},
     time::Duration,
 };
 
@@ -25,6 +26,8 @@ pin_project! {
 
         delay: Duration,
 
+        poll_next_max_ready_count: NonZeroUsize,
+
         pending_item: Option<St::Item>,
 
         // Created on demand and reused afterwards.
@@ -35,10 +38,15 @@ pin_project! {
 }
 
 impl<St: Stream, S: Sleep> Debounced<St, S> {
-    pub(crate) fn new(stream: St, delay: Duration) -> Self {
+    pub(crate) fn new(
+        stream: St,
+        delay: Duration,
+        poll_next_max_ready_count: NonZeroUsize,
+    ) -> Self {
         Self {
             stream: stream.fuse(),
             delay,
+            poll_next_max_ready_count,
             pending_item: None,
             sleep: None,
         }
@@ -56,15 +64,25 @@ where
         let DebouncedProjected {
             mut stream,
             delay,
+            poll_next_max_ready_count,
             pending_item,
             mut sleep,
         } = self.project();
 
-        // Continue polling the stream while ready. The fused stream
+        // Continue polling the stream while ready, but at most
+        // `poll_next_max_ready_count` times in a row to prevent endless
+        // loops for streams that are always ready. The fused stream
         // is never polled again after it has finished.
         let mut last_item = None;
+        let mut ready_count = 0;
+        let mut stream_maybe_ready = false;
         while let Poll::Ready(Some(next_item)) = stream.as_mut().poll_next(cx) {
             last_item = Some(next_item);
+            ready_count += 1;
+            if ready_count >= poll_next_max_ready_count.get() {
+                stream_maybe_ready = true;
+                break;
+            }
         }
 
         // Replace the pending item and restart the delay.
@@ -86,7 +104,15 @@ where
         let sleep = sleep
             .as_pin_mut()
             .expect("sleep must exist while an item is pending");
-        ready!(sleep.poll(cx));
-        Poll::Ready(pending_item.take())
+        if sleep.poll(cx).is_ready() {
+            return Poll::Ready(pending_item.take());
+        }
+        if stream_maybe_ready {
+            // Wake ourselves up to ensure that polling the inner stream
+            // continues. Not needed when returning `Ready`, because the
+            // consumer will poll again anyway.
+            cx.waker().wake_by_ref();
+        }
+        Poll::Pending
     }
 }

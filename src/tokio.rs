@@ -63,11 +63,15 @@ pub trait StreamExt: Stream {
     /// Debounces an input stream using [`tokio::time::Sleep`].
     ///
     /// See also: [`debounce_with_sleep()`](crate::StreamExt::debounce_with_sleep)
-    fn debounce(self, delay: Duration) -> Debounced<Self, tokio::time::Sleep>
+    fn debounce(
+        self,
+        delay: Duration,
+        poll_next_max_ready_count: NonZeroUsize,
+    ) -> Debounced<Self, tokio::time::Sleep>
     where
         Self: Sized,
     {
-        self.debounce_with_sleep(delay)
+        self.debounce_with_sleep(delay, poll_next_max_ready_count)
     }
 
     /// Throttles an input stream by using a fixed interval with [`tokio::time::Sleep`].

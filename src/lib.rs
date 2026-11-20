@@ -82,11 +82,21 @@ pub trait StreamExt: Stream {
     /// each sequence is emitted. All preceding items are discarded.
     ///
     /// The delay is implemented by the given [`Sleep`] type.
-    fn debounce_with_sleep<S: Sleep>(self, delay: Duration) -> Debounced<Self, S>
+    ///
+    /// The `poll_next_max_ready_count` argument controls how many _Ready_ items
+    /// are polled subsequently in a row from the input stream during an invocation
+    /// of [`Stream::poll_next()`] before polling the delay. This limit ensures
+    /// that input streams which are always ready are not polled forever.
+    /// See also: [`throttle()`](Self::throttle)
+    fn debounce_with_sleep<S: Sleep>(
+        self,
+        delay: Duration,
+        poll_next_max_ready_count: NonZeroUsize,
+    ) -> Debounced<Self, S>
     where
         Self: Sized,
     {
-        Debounced::new(self, delay)
+        Debounced::new(self, delay, poll_next_max_ready_count)
     }
 
     /// Throttles an input stream.

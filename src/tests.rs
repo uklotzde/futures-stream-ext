@@ -53,10 +53,21 @@ impl<T> Throttler<T> for NoThrottle {
 #[tokio::test]
 async fn debounce_with_sleep_should_only_emit_last_of_ready_items() {
     let actual_output = stream::iter([1, 2, 3])
-        .debounce_with_sleep::<NoSleep>(Duration::ZERO)
+        .debounce_with_sleep::<NoSleep>(Duration::ZERO, NonZeroUsize::MAX)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(vec![3], actual_output);
+}
+
+#[tokio::test]
+async fn debounce_with_sleep_should_limit_polling_of_ready_items() {
+    // The input stream is always ready and never finishes.
+    let actual_output = stream::iter(0..)
+        .debounce_with_sleep::<NoSleep>(Duration::ZERO, NonZeroUsize::new(3).unwrap())
+        .take(2)
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(vec![2, 5], actual_output);
 }
 
 #[tokio::test]
