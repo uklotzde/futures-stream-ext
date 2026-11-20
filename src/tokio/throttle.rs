@@ -22,10 +22,9 @@ enum IntervalThrottlerState {
 
 pin_project! {
     #[derive(Debug)]
-    #[project = IntervalThrottlerProjection]
     pub struct IntervalThrottler<T> {
-        config: ThrottleIntervalConfig,
-        #[pin]
+        edge: IntervalEdge,
+        // `None` if the period is zero, i.e. no throttling.
         interval: Option<Interval>,
         state: IntervalThrottlerState,
         _marker: PhantomData<T>,
@@ -44,10 +43,10 @@ fn throttle_interval(period: Duration) -> Option<Interval> {
 impl<T> IntervalThrottler<T> {
     #[must_use]
     pub(crate) fn new(config: ThrottleIntervalConfig) -> Self {
-        let interval = throttle_interval(config.period);
+        let ThrottleIntervalConfig { period, edge } = config;
         Self {
-            config,
-            interval,
+            edge,
+            interval: throttle_interval(period),
             state: IntervalThrottlerState::Idle,
             _marker: PhantomData,
         }
@@ -58,16 +57,11 @@ impl<T> Stream for IntervalThrottler<T> {
     type Item = ();
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let IntervalThrottlerProjection {
-            config: _,
-            interval,
-            state,
-            _marker,
-        } = self.project();
-        match state {
+        let this = self.project();
+        match this.state {
             IntervalThrottlerState::Idle => Poll::Pending,
-            IntervalThrottlerState::Pending => interval
-                .as_pin_mut()
+            IntervalThrottlerState::Pending => this
+                .interval
                 .as_mut()
                 .map_or(Poll::Ready(Some(())), |interval| {
                     interval.poll_tick(cx).map(|_| Some(()))
@@ -78,45 +72,25 @@ impl<T> Stream for IntervalThrottler<T> {
 
 impl<T> Throttler<T> for IntervalThrottler<T> {
     fn throttle_pending(self: Pin<&mut Self>, _cx: &mut Context<'_>) {
-        let IntervalThrottlerProjection {
-            config: ThrottleIntervalConfig { period: _, edge },
-            interval,
-            state,
-            _marker,
-        } = self.project();
-        match state {
-            IntervalThrottlerState::Idle => {
-                *state = IntervalThrottlerState::Pending;
-                let Some(mut interval) = interval.as_pin_mut() else {
-                    return;
-                };
-                match edge {
-                    IntervalEdge::Leading => {
-                        interval.reset_immediately();
-                    }
-                    IntervalEdge::Trailing => {
-                        interval.reset();
-                    }
-                }
-            }
-            IntervalThrottlerState::Pending => (),
+        let this = self.project();
+        if matches!(this.state, IntervalThrottlerState::Pending) {
+            return;
+        }
+        *this.state = IntervalThrottlerState::Pending;
+        let Some(interval) = this.interval else {
+            return;
+        };
+        match this.edge {
+            IntervalEdge::Leading => interval.reset_immediately(),
+            IntervalEdge::Trailing => interval.reset(),
         }
     }
 
     fn throttle_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>, next_item: Option<&T>) {
-        let IntervalThrottlerProjection {
-            config: _,
-            interval: _,
-            state,
-            _marker,
-        } = self.project();
-        match state {
-            IntervalThrottlerState::Idle => unreachable!(),
-            IntervalThrottlerState::Pending => {
-                if next_item.is_none() {
-                    *state = IntervalThrottlerState::Idle;
-                }
-            }
+        let this = self.project();
+        assert!(matches!(this.state, IntervalThrottlerState::Pending));
+        if next_item.is_none() {
+            *this.state = IntervalThrottlerState::Idle;
         }
     }
 }
