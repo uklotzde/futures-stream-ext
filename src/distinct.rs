@@ -150,29 +150,30 @@ where
     filter_stateful_sync(stream, None, filter_distinct_until_changed)
 }
 
-/// Filters out subsequent/adjacent stream items (mapped).
+/// Filters out subsequent/adjacent stream items with the same key.
 ///
-/// Operates on mapped values of stream items.
-/// Each stream item will be mapped once.
-/// The last value is stored until a different value occurs.
+/// Compares the keys of stream items that are extracted by `key_fn`.
+/// The key of each stream item is extracted once and the items are
+/// passed through unmodified.
+/// The last key is stored until a different key occurs.
 ///
 /// See also: [`distinct_until_changed()`]
-pub fn distinct_until_changed_map<S, T, F>(
+pub fn distinct_until_changed_by_key<S, K, F>(
     stream: S,
-    initial_value: T,
-    mut map_fn: F,
+    initial_key: K,
+    mut key_fn: F,
 ) -> impl Stream<Item = S::Item>
 where
     S: Stream,
-    F: FnMut(&S::Item) -> T,
-    T: PartialEq,
+    F: FnMut(&S::Item) -> K,
+    K: PartialEq,
 {
-    filter_stateful_sync(stream, initial_value, move |last_value, next_item| {
-        let next_value = map_fn(next_item);
-        if *last_value == next_value {
+    filter_stateful_sync(stream, initial_key, move |last_key, next_item| {
+        let next_key = key_fn(next_item);
+        if *last_key == next_key {
             return false;
         }
-        *last_value = next_value;
+        *last_key = next_key;
         true
     })
 }

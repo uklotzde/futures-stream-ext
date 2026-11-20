@@ -14,10 +14,10 @@ async fn distinct_until_changed() {
 }
 
 #[tokio::test]
-async fn distinct_until_changed_map() {
+async fn distinct_until_changed_by_key() {
     let input = futures_util::stream::iter([1, 1, 2, 1, 2, 2, 4, 5, 2, 3, 3, 7]);
     let expected_output = vec![1, 2, 1, 2, 4, 2, 7];
-    let actual_output = super::distinct_until_changed_map(input, None, |item| Some(item / 2))
+    let actual_output = super::distinct_until_changed_by_key(input, None, |item| Some(item / 2))
         .collect::<Vec<_>>()
         .await;
     assert_eq!(expected_output, actual_output);
