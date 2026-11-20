@@ -7,7 +7,7 @@ use futures_util::StreamExt as _;
 use tokio::time::Instant;
 
 use super::test_util::{
-    DefaultResetSleep, TIME_TICK, alternating_delay_stream, collect_with_millis, scheduled_stream,
+    DefaultResetSleep, alternating_delay_stream, collect_with_millis, ms, scheduled_stream,
 };
 use crate::{Sleep, StreamExt as _};
 
@@ -26,8 +26,8 @@ async fn debounce_periodic_with_sleep<S: Sleep>(
 
 #[tokio::test(start_paused = true)]
 async fn should_debounce_a_periodic_input_stream() {
-    let debounce_delay = TIME_TICK.saturating_mul(10);
-    let item_period = TIME_TICK.saturating_mul(17);
+    let debounce_delay = ms(10);
+    let item_period = ms(17);
     let expected = [
         (10, 0),
         (27, 1),
@@ -112,13 +112,13 @@ async fn debounce_schedule_with_sleep<S: Sleep>(
 
 #[tokio::test(start_paused = true)]
 async fn should_finish_on_empty_input_stream() {
-    let collected = debounce_schedule(TIME_TICK.saturating_mul(10), []).await;
+    let collected = debounce_schedule(ms(10), []).await;
     assert_eq!(Vec::<(u128, usize)>::new(), collected);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_single_item_after_delay() {
-    let collected = debounce_schedule(TIME_TICK.saturating_mul(10), [(5, 0)]).await;
+    let collected = debounce_schedule(ms(10), [(5, 0)]).await;
     assert_eq!(vec![(15, 0)], collected);
 }
 
@@ -126,18 +126,14 @@ async fn should_emit_single_item_after_delay() {
 async fn should_only_emit_the_last_item_of_a_burst() {
     // All items arrive within the delay window of their predecessor.
     // The delay restarts with each item.
-    let collected = debounce_schedule(
-        TIME_TICK.saturating_mul(10),
-        [(0, 0), (5, 1), (10, 2), (19, 3)],
-    )
-    .await;
+    let collected = debounce_schedule(ms(10), [(0, 0), (5, 1), (10, 2), (19, 3)]).await;
     assert_eq!(vec![(29, 3)], collected);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_only_emit_the_last_item_of_each_burst() {
     let collected = debounce_schedule(
-        TIME_TICK.saturating_mul(10),
+        ms(10),
         [(0, 0), (5, 1), (30, 2), (35, 3), (39, 4), (100, 5)],
     )
     .await;
@@ -146,18 +142,13 @@ async fn should_only_emit_the_last_item_of_each_burst() {
 
 #[tokio::test(start_paused = true)]
 async fn should_emit_all_items_that_arrive_slower_than_the_delay() {
-    let collected =
-        debounce_schedule(TIME_TICK.saturating_mul(10), [(0, 0), (11, 1), (30, 2)]).await;
+    let collected = debounce_schedule(ms(10), [(0, 0), (11, 1), (30, 2)]).await;
     assert_eq!(vec![(10, 0), (21, 1), (40, 2)], collected);
 }
 
 #[tokio::test(start_paused = true)]
 async fn should_discard_items_that_are_ready_at_the_same_time() {
-    let collected = debounce_schedule(
-        TIME_TICK.saturating_mul(10),
-        [(0, 0), (0, 1), (0, 2), (20, 3), (20, 4)],
-    )
-    .await;
+    let collected = debounce_schedule(ms(10), [(0, 0), (0, 1), (0, 2), (20, 3), (20, 4)]).await;
     assert_eq!(vec![(10, 2), (30, 4)], collected);
 }
 
@@ -165,7 +156,7 @@ async fn should_discard_items_that_are_ready_at_the_same_time() {
 async fn should_emit_the_pending_item_after_the_input_stream_has_finished() {
     // The input stream finishes immediately after the last item
     // while it is still pending.
-    let collected = debounce_schedule(TIME_TICK.saturating_mul(10), [(0, 0), (3, 1)]).await;
+    let collected = debounce_schedule(ms(10), [(0, 0), (3, 1)]).await;
     assert_eq!(vec![(13, 1)], collected);
 }
 

@@ -14,7 +14,10 @@ use tokio::time::{Instant, sleep_until};
 
 use crate::Sleep;
 
-pub(super) const TIME_TICK: Duration = Duration::from_millis(1);
+/// Shorthand for [`Duration::from_millis()`].
+pub(super) const fn ms(millis: u64) -> Duration {
+    Duration::from_millis(millis)
+}
 
 /// A [`Sleep`] that only implements [`Sleep::sleep()`].
 ///
