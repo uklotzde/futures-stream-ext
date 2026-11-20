@@ -15,6 +15,9 @@ mod debounce;
 #[cfg(test)]
 mod throttle;
 
+#[cfg(test)]
+mod test_util;
+
 /// [`IntervalThrottler`](crate::IntervalThrottler) using [`tokio::time::Sleep`].
 pub type IntervalThrottler = crate::IntervalThrottler<tokio::time::Sleep>;
 

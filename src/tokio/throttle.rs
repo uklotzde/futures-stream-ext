@@ -3,65 +3,27 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use futures::{Stream, StreamExt as _, stream};
-use tokio::{
-    runtime,
-    time::{self, Instant, sleep_until},
-};
+use futures::StreamExt as _;
+use tokio::time::Instant;
 
+use super::test_util::{TIME_TICK, alternating_delay_stream, collect_with_millis};
 use crate::{IntervalEdge, ThrottleIntervalConfig, tokio::StreamExt as _};
 
-const TIME_TICK: Duration = Duration::from_millis(1);
-
-#[expect(clippy::cast_possible_truncation)]
-fn alternating_delay_stream(
-    started_at: Instant,
-    first_delay: Duration,
-    second_delay: Duration,
-) -> impl Stream<Item = usize> {
-    stream::iter(0..).filter(move |&i| async move {
-        // The first items is yielded immediately, all subsequent items are delayed
-        // by a fixed amount between each other.
-        sleep_until(
-            started_at
-                + first_delay.saturating_mul((i + 1) as u32 / 2)
-                + second_delay.saturating_mul(i as u32 / 2),
-        )
-        .await;
-        true
-    })
-}
-
-fn run_alternating_delay_stream(
+async fn run_alternating_delay_stream(
     config: ThrottleIntervalConfig,
     first_delay: Duration,
     second_delay: Duration,
     num_items: usize,
 ) -> Vec<(u128, usize)> {
-    let rt = runtime::Builder::new_current_thread()
-        .enable_time()
-        .start_paused(true)
-        .build()
-        .unwrap();
-    let rt_handle = rt.handle();
-    rt.block_on(async move {
-        let started_at = Instant::now();
-        let join_handle = rt_handle.spawn(
-            alternating_delay_stream(started_at, first_delay, second_delay)
-                .throttle_interval(config, NonZeroUsize::MIN)
-                .map(move |item| ((Instant::now() - started_at).as_millis(), item))
-                .take(num_items)
-                .collect::<Vec<_>>(),
-        );
-        rt_handle.spawn(async move {
-            time::advance(TIME_TICK).await;
-        });
-        join_handle.await.unwrap()
-    })
+    let started_at = Instant::now();
+    let throttled = alternating_delay_stream(started_at, first_delay, second_delay)
+        .throttle_interval(config, NonZeroUsize::MIN)
+        .take(num_items);
+    collect_with_millis(started_at, throttled).await
 }
 
-#[test]
-fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_period() {
+#[tokio::test(start_paused = true)]
+async fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_period() {
     let first_delay = Duration::ZERO;
     let second_delay = Duration::ZERO;
     let period = Duration::ZERO;
@@ -88,14 +50,15 @@ fn should_pass_through_an_input_stream_that_is_always_ready_with_an_empty_period
         },
     ] {
         assert_eq!(
-            &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len(),),
+            &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
+                .await,
             &expected_items
         );
     }
 }
 
-#[test]
-fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_arrival_rate() {
+#[tokio::test(start_paused = true)]
+async fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_arrival_rate() {
     let first_delay = TIME_TICK.saturating_mul(10);
     let second_delay = TIME_TICK.saturating_mul(20);
     let period = TIME_TICK.saturating_mul(9);
@@ -132,7 +95,8 @@ fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_arriva
             first_delay,
             second_delay,
             expected_leading.len(),
-        ),
+        )
+        .await,
         &expected_leading
     );
     assert_eq!(
@@ -144,13 +108,14 @@ fn should_pass_through_the_input_stream_if_the_period_is_shorter_than_the_arriva
             first_delay,
             second_delay,
             expected_trailing.len(),
-        ),
+        )
+        .await,
         &expected_trailing
     );
 }
 
-#[test]
-fn leading_edge_sequence() {
+#[tokio::test(start_paused = true)]
+async fn leading_edge_sequence() {
     // ms:   0 | 20 | 30 | 50 | 60 | 80 | 90 | 110 | 120 | 140 | 150 | 170 | 180 | 200 | 210 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 | ...
     let first_delay = TIME_TICK.saturating_mul(20);
@@ -176,12 +141,12 @@ fn leading_edge_sequence() {
         (210, 14),
     ];
     let collected_items =
-        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len());
+        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
     assert_eq!(expected_items, collected_items.as_slice());
 }
 
-#[test]
-fn trailing_edge_sequence() {
+#[tokio::test(start_paused = true)]
+async fn trailing_edge_sequence() {
     // ms:   0 | 10 | 30 | 40 | 60 | 70 | 90 | 100 | 120 | 130 | 150 | 160 | 180 | 190 | 210 | 220 | ...
     // item: 0 |  1 |  2 |  3 |  4 |  5 |  6 |   7 |   8 |   9 |  10 |  11 |  12 |  13 |  14 |  15 | ...
     let first_delay = TIME_TICK.saturating_mul(10);
@@ -206,12 +171,12 @@ fn trailing_edge_sequence() {
         (229, 15),
     ];
     let collected_items =
-        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len());
+        run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()).await;
     assert_eq!(expected_items, collected_items.as_slice());
 }
 
-#[test]
-fn trailing_edge_sequence_long_second_delay() {
+#[tokio::test(start_paused = true)]
+async fn trailing_edge_sequence_long_second_delay() {
     // ms:   0 | 10 | 110 | 120 | 220 | 230 | 330 | 340 | ...
     // item: 0 |  1 |   2 |   3 |   4 |   5 |   6 |   7 | ...
     let first_delay = TIME_TICK.saturating_mul(10);
@@ -222,7 +187,8 @@ fn trailing_edge_sequence_long_second_delay() {
     };
     let expected_items = &[(19, 1), (129, 3), (239, 5), (349, 7)];
     assert_eq!(
-        &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len()),
+        &run_alternating_delay_stream(config, first_delay, second_delay, expected_items.len())
+            .await,
         &expected_items
     );
 }
@@ -268,11 +234,8 @@ async fn should_drain_an_always_ready_input_stream_between_ticks() {
         edge: IntervalEdge::Trailing,
     };
     let started_at = Instant::now();
-    let collected_items = stream::iter(0..5)
-        .throttle_interval(config, NonZeroUsize::MIN)
-        .map(|item| ((Instant::now() - started_at).as_millis(), item))
-        .collect::<Vec<_>>()
-        .await;
+    let throttled = futures::stream::iter(0..5).throttle_interval(config, NonZeroUsize::MIN);
+    let collected_items = collect_with_millis(started_at, throttled).await;
     // All items are ready immediately and only the last one is yielded
     // after the first interval has elapsed.
     assert_eq!(vec![(10, 4)], collected_items);

@@ -3,55 +3,16 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use futures::{Stream, StreamExt as _, stream};
-use tokio::{
-    runtime,
-    time::{self, Instant, sleep_until},
-};
+use futures::StreamExt as _;
+use tokio::time::Instant;
 
+use super::test_util::{
+    TIME_TICK, alternating_delay_stream, collect_with_millis, scheduled_stream,
+};
 use crate::tokio::StreamExt as _;
 
-const TIME_TICK: Duration = Duration::from_millis(1);
-
-#[expect(clippy::cast_possible_truncation)]
-fn periodic_stream(started_at: Instant, period: Duration) -> impl Stream<Item = usize> {
-    stream::iter(0..).filter(move |&i| async move {
-        // The first items is yielded immediately, all subsequent items are delayed
-        // by a fixed amount between each other.
-        sleep_until(started_at + period.saturating_mul(i as u32)).await;
-        true
-    })
-}
-
-fn run_periodic_stream_debounced(
-    debounce_delay: Duration,
-    item_period: Duration,
-    num_items: usize,
-) -> Vec<(u128, usize)> {
-    let rt = runtime::Builder::new_current_thread()
-        .enable_time()
-        .start_paused(true)
-        .build()
-        .unwrap();
-    let rt_handle = rt.handle();
-    rt.block_on(async move {
-        let started_at = Instant::now();
-        let join_handle = rt_handle.spawn(
-            periodic_stream(started_at, item_period)
-                .debounce(debounce_delay, NonZeroUsize::MIN)
-                .map(move |item| ((Instant::now() - started_at).as_millis(), item))
-                .take(num_items)
-                .collect::<Vec<_>>(),
-        );
-        rt_handle.spawn(async move {
-            time::advance(TIME_TICK).await;
-        });
-        join_handle.await.unwrap()
-    })
-}
-
-#[test]
-fn debounce() {
+#[tokio::test(start_paused = true)]
+async fn should_debounce_a_periodic_input_stream() {
     let debounce_delay = TIME_TICK.saturating_mul(10);
     let item_period = TIME_TICK.saturating_mul(17);
     let expected = [
@@ -66,9 +27,13 @@ fn debounce() {
         (146, 8),
         (163, 9),
     ];
+    let started_at = Instant::now();
+    let debounced = alternating_delay_stream(started_at, item_period, item_period)
+        .debounce(debounce_delay, NonZeroUsize::MIN)
+        .take(expected.len());
     assert_eq!(
-        &run_periodic_stream_debounced(debounce_delay, item_period, expected.len()),
-        &expected
+        expected.as_slice(),
+        collect_with_millis(started_at, debounced).await
     );
 }
 
@@ -89,15 +54,9 @@ async fn debounce_schedule_with_max_ready_count(
     poll_next_max_ready_count: NonZeroUsize,
 ) -> Vec<(u128, usize)> {
     let started_at = Instant::now();
-    stream::iter(schedule)
-        .then(move |(arrival_millis, item)| async move {
-            sleep_until(started_at + Duration::from_millis(arrival_millis)).await;
-            item
-        })
-        .debounce(debounce_delay, poll_next_max_ready_count)
-        .map(move |item| ((Instant::now() - started_at).as_millis(), item))
-        .collect()
-        .await
+    let debounced =
+        scheduled_stream(started_at, schedule).debounce(debounce_delay, poll_next_max_ready_count);
+    collect_with_millis(started_at, debounced).await
 }
 
 #[tokio::test(start_paused = true)]
